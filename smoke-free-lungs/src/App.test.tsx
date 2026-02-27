@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
 
 function formatISODateLocal(date: Date): string {
@@ -26,27 +26,36 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const yearsInput = screen.getByLabelText(/years smoked/i);
-    await user.clear(yearsInput);
+    const qtyInput = screen.getByRole("spinbutton", { name: /quantity/i });
+    await user.clear(qtyInput);
 
-    expect(await screen.findByText(/enter years smoked/i)).toBeInTheDocument();
+    expect(await screen.findByText(/enter smoking quantity/i)).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /lung recovery visualization/i })).toBeInTheDocument();
   });
 
-  it("updates projected state when the timeline slider moves ahead", () => {
+  it("supports timeline day input and recovery-date quick jump", async () => {
     render(<App />);
 
-    const timeline = screen.getByLabelText(/recovery timeline preview/i);
-    fireEvent.change(timeline, { target: { value: "30" } });
+    const dayInput = screen.getByLabelText(/go to day number/i);
+    fireEvent.change(dayInput, { target: { value: "45" } });
+    expect(dayInput).toHaveValue(45);
 
-    expect(screen.getByText(/projected view/i)).toBeInTheDocument();
+    const recoveryJump = screen.getByRole("button", { name: /\+recovery date/i });
+    fireEvent.click(recoveryJump);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/go to day number/i)).toHaveValue(
+        Number((screen.getByLabelText(/go to day number/i) as HTMLInputElement).max),
+      );
+    });
   });
 
   it("unlocks badges at exact day thresholds and persists earned ids", async () => {
     render(<App />);
 
-    const quitDateInput = screen.getByLabelText(/quit date/i);
+    const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
     fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(3) } });
+    fireEvent.click(screen.getByRole("button", { name: /submit smoking history/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("badge-day-3")).toHaveAttribute("data-unlocked", "true");
@@ -59,6 +68,32 @@ describe("App", () => {
       expect(savedRaw).not.toBeNull();
       const saved = JSON.parse(savedRaw as string) as { earnedBadgeIds: string[] };
       expect(saved.earnedBadgeIds).toContain("day-3");
+    });
+  });
+
+  it("answers a question for selected lung hotspot", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId("hotspot-bronchi"));
+
+    const questionInput = screen.getByLabelText(/ask lungs a question/i);
+    fireEvent.change(questionInput, { target: { value: "What does this part do?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("qa-answer").textContent?.toLowerCase()).toContain("cilia function proxy");
+    });
+  });
+
+  it("keeps recovery activity tied to current day since quit", async () => {
+    render(<App />);
+
+    const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
+    fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(12) } });
+    fireEvent.click(screen.getByRole("button", { name: /submit smoking history/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/today, day 12 since quit/i)).toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,17 @@
 // src/storage.ts
-import type { Inputs } from "./model";
+import { DEFAULT_BRAND_ID } from "./cigBrands";
+import {
+  addDaysToISO,
+  inferDOBFromAgeYears,
+  todayISO,
+  type BiologicalSex,
+  type ConsumptionIntervalUnit,
+  type ConsumptionUnit,
+  type HeightUnit,
+  type Inputs,
+  type SmokingLengthMode,
+  type WeightUnit,
+} from "./model";
 
 const LEGACY_KEY = "sfl_inputs_v1";
 const STATE_KEY_V2 = "sfl_state_v2";
@@ -14,15 +26,115 @@ function isNumberishOrEmpty(value: unknown): value is number | "" {
   return value === "" || (typeof value === "number" && Number.isFinite(value));
 }
 
-function isInputs(value: unknown): value is Inputs {
-  if (!value || typeof value !== "object") return false;
+function normalizeSex(value: unknown): BiologicalSex {
+  if (value === "female" || value === "male" || value === "other") return value;
+  return "other";
+}
+
+function normalizeConsumptionUnit(value: unknown): ConsumptionUnit {
+  if (value === "packs") return "packs";
+  return "cigarettes";
+}
+
+function normalizeConsumptionIntervalUnit(value: unknown): ConsumptionIntervalUnit {
+  if (value === "weeks") return "weeks";
+  return "days";
+}
+
+function normalizeLengthMode(value: unknown): SmokingLengthMode {
+  if (value === "approx_years") return "approx_years";
+  return "exact_dates";
+}
+
+function normalizeWeightUnit(value: unknown): WeightUnit {
+  if (value === "lb") return "lb";
+  return "kg";
+}
+
+function normalizeHeightUnit(value: unknown): HeightUnit {
+  if (value === "in") return "in";
+  return "cm";
+}
+
+function inferSmokingStartFromYears(quitDateISO: string, years: number): string {
+  const days = Math.max(0, Math.round(years * 365.25));
+  return addDaysToISO(quitDateISO, -days) ?? quitDateISO;
+}
+
+function normalizeInputs(value: unknown): Inputs | null {
+  if (!value || typeof value !== "object") return null;
 
   const record = value as Record<string, unknown>;
-  return (
-    isNumberishOrEmpty(record.yearsSmoking) &&
-    isNumberishOrEmpty(record.cigsPerDay) &&
-    typeof record.quitDateISO === "string"
-  );
+  const smokingLengthMode = normalizeLengthMode(record.smokingLengthMode);
+
+  const quitDateISO = typeof record.quitDateISO === "string" ? record.quitDateISO : todayISO();
+
+  const approxSmokingYears =
+    isNumberishOrEmpty(record.approxSmokingYears) && record.approxSmokingYears !== ""
+      ? record.approxSmokingYears
+      : isNumberishOrEmpty(record.yearsSmoking) && record.yearsSmoking !== ""
+        ? record.yearsSmoking
+        : "";
+
+  let smokingStartDateISO =
+    typeof record.smokingStartDateISO === "string"
+      ? record.smokingStartDateISO
+      : quitDateISO;
+
+  if (!record.smokingStartDateISO && typeof approxSmokingYears === "number") {
+    smokingStartDateISO = inferSmokingStartFromYears(quitDateISO, approxSmokingYears);
+  }
+
+  const legacyCigsPerDay = isNumberishOrEmpty(record.cigsPerDay) ? record.cigsPerDay : 0;
+
+  const weightUnit = normalizeWeightUnit(record.weightUnit);
+  const heightUnit = normalizeHeightUnit(record.heightUnit);
+
+  const weightValue =
+    isNumberishOrEmpty(record.weightValue)
+      ? record.weightValue
+      : isNumberishOrEmpty(record.weightKg)
+        ? record.weightKg
+        : "";
+
+  const heightValue =
+    isNumberishOrEmpty(record.heightValue)
+      ? record.heightValue
+      : isNumberishOrEmpty(record.heightCm)
+        ? record.heightCm
+        : "";
+
+  return {
+    smokingLengthMode,
+    smokingStartDateISO,
+    approxSmokingYears,
+    quitDateISO,
+    consumptionUnit: normalizeConsumptionUnit(record.consumptionUnit),
+    consumptionQuantity: isNumberishOrEmpty(record.consumptionQuantity)
+      ? record.consumptionQuantity
+      : legacyCigsPerDay,
+    consumptionIntervalUnit: normalizeConsumptionIntervalUnit(record.consumptionIntervalUnit),
+    consumptionIntervalCount: isNumberishOrEmpty(record.consumptionIntervalCount)
+      ? record.consumptionIntervalCount
+      : 1,
+    cigaretteBrandId:
+      typeof record.cigaretteBrandId === "string" && record.cigaretteBrandId.length > 0
+        ? record.cigaretteBrandId
+        : DEFAULT_BRAND_ID,
+    dobISO:
+      typeof record.dobISO === "string"
+        ? record.dobISO
+        : inferDOBFromAgeYears(
+            typeof record.ageYears === "number" && Number.isFinite(record.ageYears)
+              ? record.ageYears
+              : 35,
+          ),
+    biologicalSex: normalizeSex(record.biologicalSex),
+    weightValue: weightValue === "" ? 70 : weightValue,
+    weightUnit,
+    heightValue: heightValue === "" ? 170 : heightValue,
+    heightUnit,
+  };
 }
 
 function normalizeBadgeIds(value: unknown): string[] {
@@ -42,11 +154,13 @@ function normalizeStoredState(value: unknown): StoredStateV2 | null {
 
   const record = value as Record<string, unknown>;
   if (record.schemaVersion !== 2) return null;
-  if (!isInputs(record.inputs)) return null;
+
+  const normalizedInputs = normalizeInputs(record.inputs);
+  if (!normalizedInputs) return null;
 
   return {
     schemaVersion: 2,
-    inputs: record.inputs,
+    inputs: normalizedInputs,
     earnedBadgeIds: normalizeBadgeIds(record.earnedBadgeIds),
   };
 }
@@ -64,11 +178,12 @@ export function loadStoredState(): StoredStateV2 | null {
     if (!legacyRaw) return null;
 
     const legacyParsed = JSON.parse(legacyRaw) as unknown;
-    if (!isInputs(legacyParsed)) return null;
+    const normalizedInputs = normalizeInputs(legacyParsed);
+    if (!normalizedInputs) return null;
 
     return {
       schemaVersion: 2,
-      inputs: legacyParsed,
+      inputs: normalizedInputs,
       earnedBadgeIds: [],
     };
   } catch {

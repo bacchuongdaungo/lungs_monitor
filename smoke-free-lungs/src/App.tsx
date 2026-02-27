@@ -1,17 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { DEFAULT_BRAND_ID } from "./cigBrands";
 import { LungViz } from "./LungViz";
 import { BadgeStrip } from "./components/BadgeStrip";
+import { BreathingDemo } from "./components/BreathingDemo";
 import { InputForm } from "./components/InputForm";
+import { LungCoach } from "./components/LungCoach";
 import { MethodPanel } from "./components/MethodPanel";
+import { RecoveryActivity } from "./components/RecoveryActivity";
 import { StatsCards } from "./components/StatsCards";
 import { TimelineScrubber } from "./components/TimelineScrubber";
 import { getEarnedBadgeIds, mergeEarnedBadgeIds, MILESTONE_BADGES } from "./milestones";
+import type { LungPartId } from "./lungKnowledge";
 import {
   computeRecoveryState,
   daysSince,
+  estimateFullRecoveryDay,
+  formatISODateLocal,
+  inferDOBFromAgeYears,
   type Inputs,
-  MAX_PREVIEW_DAYS,
   parseISODateLocal,
   sanitizeInputs,
   todayISO,
@@ -19,19 +26,41 @@ import {
 } from "./model";
 import { loadStoredState, saveStoredState } from "./storage";
 
-const clampPreview = (value: number) => Math.max(0, Math.min(MAX_PREVIEW_DAYS, Math.round(value)));
+const clampPreview = (value: number, maxDays: number) => Math.max(0, Math.min(maxDays, Math.round(value)));
+
+function defaultSmokingStartISO(now = new Date()): string {
+  const start = new Date(now);
+  start.setFullYear(start.getFullYear() - 8);
+  return formatISODateLocal(start);
+}
 
 function defaultInputs(now = new Date()): Inputs {
   return {
-    yearsSmoking: 5,
-    cigsPerDay: 10,
+    smokingLengthMode: "exact_dates",
+    smokingStartDateISO: defaultSmokingStartISO(now),
+    approxSmokingYears: 8,
     quitDateISO: todayISO(now),
+    consumptionUnit: "cigarettes",
+    consumptionQuantity: 10,
+    consumptionIntervalUnit: "days",
+    consumptionIntervalCount: 1,
+    cigaretteBrandId: DEFAULT_BRAND_ID,
+    dobISO: inferDOBFromAgeYears(35, now),
+    biologicalSex: "other",
+    weightValue: 70,
+    weightUnit: "kg",
+    heightValue: 170,
+    heightUnit: "cm",
   };
 }
 
 export default function App() {
   const [initialState] = useState(() => loadStoredState());
-  const [inputs, setInputs] = useState<Inputs>(() => initialState?.inputs ?? defaultInputs());
+  const [initialInputs] = useState<Inputs>(() => initialState?.inputs ?? defaultInputs());
+  const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
+  const [draftInputs, setDraftInputs] = useState<Inputs>(() => initialInputs);
+  const [isEditing, setIsEditing] = useState<boolean>(() => !initialState);
+  const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>(() => {
     const sourceInputs = initialState?.inputs ?? defaultInputs();
     const persisted = initialState?.earnedBadgeIds ?? [];
@@ -40,17 +69,26 @@ export default function App() {
   });
   const [previewDays, setPreviewDays] = useState<number>(() => {
     const sourceInputs = initialState?.inputs ?? defaultInputs();
-    return clampPreview(daysSince(sourceInputs.quitDateISO));
+    return Math.max(0, daysSince(sourceInputs.quitDateISO));
   });
 
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
 
-  const validation = useMemo(() => validateInputs(inputs, now), [inputs, now]);
+  const validation = useMemo(() => validateInputs(draftInputs, now), [draftInputs, now]);
+  const draftSummary = useMemo(() => sanitizeInputs(draftInputs, now), [draftInputs, now]);
   const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
+  const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
+  const canSubmit = validation.value != null;
+
+  const effectivePreviewDays = useMemo(
+    () => clampPreview(previewDays, fullRecoveryDay),
+    [previewDays, fullRecoveryDay],
+  );
+
   const state = useMemo(
-    () => computeRecoveryState(safeInputs, previewDays, now),
-    [safeInputs, previewDays, now],
+    () => computeRecoveryState(safeInputs, effectivePreviewDays, now, fullRecoveryDay),
+    [safeInputs, effectivePreviewDays, now, fullRecoveryDay],
   );
 
   useEffect(() => {
@@ -61,23 +99,36 @@ export default function App() {
     });
   }, [inputs, earnedBadgeIds]);
 
-  const seedKey = `${safeInputs.yearsSmoking}|${safeInputs.cigsPerDay}|${safeInputs.quitDateISO}`;
+  const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}`;
 
-  function handleInputChange(key: keyof Inputs, value: Inputs[keyof Inputs]) {
+  function handleDraftChange(key: keyof Inputs, value: Inputs[keyof Inputs]) {
+    setDraftInputs((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function handleSubmitHistory() {
+    if (!canSubmit) return;
+
     const nowForUpdate = new Date();
+    setInputs(draftInputs);
 
-    setInputs((current) => {
-      const next = {
-        ...current,
-        [key]: value,
-      };
+    const safeNext = sanitizeInputs(draftInputs, nowForUpdate);
+    const unlocked = getEarnedBadgeIds(daysSince(safeNext.quitDateISO, nowForUpdate));
+    setEarnedBadgeIds((persisted) => mergeEarnedBadgeIds(persisted, unlocked));
+    setPreviewDays(daysSince(safeNext.quitDateISO, nowForUpdate));
+    setIsEditing(false);
+  }
 
-      const safeNext = sanitizeInputs(next, nowForUpdate);
-      const unlocked = getEarnedBadgeIds(daysSince(safeNext.quitDateISO, nowForUpdate));
-      setEarnedBadgeIds((persisted) => mergeEarnedBadgeIds(persisted, unlocked));
+  function handleEditHistory() {
+    setDraftInputs(inputs);
+    setIsEditing(true);
+  }
 
-      return next;
-    });
+  function handleCancelHistory() {
+    setDraftInputs(inputs);
+    setIsEditing(false);
   }
 
   return (
@@ -86,31 +137,59 @@ export default function App() {
         <p className="eyebrow">Smoke-Free Lungs</p>
         <h1>Cartoon lungs that clear as smoke-free days stack up</h1>
         <p>
-          Enter your smoking history once. The model estimates recovery trends over time and keeps the
-          art deterministic for your profile.
+          Enter your smoking pattern and body metrics. The model estimates recovery
+          trends and keeps art deterministic for your profile.
         </p>
       </header>
 
       <section className="layout-grid">
         <article className="card card--intake">
-          <InputForm inputs={inputs} errors={validation.errors} onChange={handleInputChange} />
+          <InputForm
+            inputs={isEditing ? draftInputs : inputs}
+            errors={validation.errors}
+            summary={isEditing ? draftSummary : safeInputs}
+            isEditing={isEditing}
+            canSubmit={canSubmit}
+            onChange={handleDraftChange}
+            onSubmit={handleSubmitHistory}
+            onEdit={handleEditHistory}
+            onCancel={handleCancelHistory}
+          />
         </article>
 
         <article className="card card--viz">
-          <LungViz state={state} seedKey={seedKey} />
+          <LungViz
+            state={state}
+            seedKey={seedKey}
+            selectedPartId={selectedPartId}
+            onSelectPart={setSelectedPartId}
+          />
+        </article>
+
+        <article className="card card--coach">
+          <LungCoach selectedPartId={selectedPartId} state={state} />
         </article>
 
         <article className="card card--timeline">
           <TimelineScrubber
             previewDays={state.previewDays}
             actualDays={state.daysSinceQuit}
+            maxDays={state.maxPreviewDays}
             quitDateISO={safeInputs.quitDateISO}
             onChange={setPreviewDays}
           />
         </article>
 
+        <article className="card card--activity">
+          <RecoveryActivity quitDateISO={safeInputs.quitDateISO} currentDaysSinceQuit={state.daysSinceQuit} />
+        </article>
+
         <article className="card card--stats">
           <StatsCards state={state} />
+        </article>
+
+        <article className="card card--breathing">
+          <BreathingDemo state={state} />
         </article>
 
         <article className="card card--badges">

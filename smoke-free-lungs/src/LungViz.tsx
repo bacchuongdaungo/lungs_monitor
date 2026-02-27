@@ -1,11 +1,14 @@
 import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { RecoveryState } from "./model";
+import type { LungPartId } from "./lungKnowledge";
 import { hashStringToUint32, mulberry32 } from "./rng";
 
 type Props = {
   state: RecoveryState;
   seedKey: string;
+  selectedPartId?: LungPartId | null;
+  onSelectPart?: (partId: LungPartId) => void;
 };
 
 type Particle = {
@@ -13,6 +16,23 @@ type Particle = {
   y: number;
   r: number;
 };
+
+type Hotspot = {
+  id: LungPartId;
+  label: string;
+  cx: number;
+  cy: number;
+  r: number;
+};
+
+const HOTSPOTS: Hotspot[] = [
+  { id: "trachea", label: "Trachea", cx: 50, cy: 15, r: 4.6 },
+  { id: "bronchi", label: "Bronchi", cx: 50, cy: 31, r: 4.8 },
+  { id: "alveoli", label: "Alveoli", cx: 50, cy: 64, r: 5.5 },
+  { id: "left-lung", label: "Left lung tissue", cx: 34, cy: 56, r: 5.8 },
+  { id: "right-lung", label: "Right lung tissue", cx: 66, cy: 56, r: 5.8 },
+  { id: "pleura", label: "Pleura", cx: 79, cy: 72, r: 5.2 },
+];
 
 function genParticles(seedKey: string, count: number): Particle[] {
   const seed = hashStringToUint32(seedKey);
@@ -34,7 +54,7 @@ function genParticles(seedKey: string, count: number): Particle[] {
   return particles;
 }
 
-export function LungViz({ state, seedKey }: Props) {
+export function LungViz({ state, seedKey, selectedPartId = null, onSelectPart }: Props) {
   const maxParticles = 760;
   const particles = useMemo(() => genParticles(seedKey, maxParticles), [seedKey]);
 
@@ -139,6 +159,34 @@ export function LungViz({ state, seedKey }: Props) {
           <path d="M65 46 C66 48, 67 50, 68 52" fill="none" stroke="#2d211a" strokeWidth="1" />
         </g>
 
+        <g>
+          {HOTSPOTS.map((spot) => {
+            const active = selectedPartId === spot.id;
+            return (
+              <g key={spot.id}>
+                <circle
+                  cx={spot.cx}
+                  cy={spot.cy}
+                  r={spot.r}
+                  fill={active ? "#2b7a78" : "#0d5f8a"}
+                  opacity={active ? 0.22 : 0.08}
+                  stroke={active ? "#2b7a78" : "#0d5f8a"}
+                  strokeWidth={active ? 0.55 : 0.35}
+                  className="hotspot-ring"
+                  data-testid={`hotspot-${spot.id}`}
+                  aria-label={`Ask about ${spot.label}`}
+                  onClick={() => onSelectPart?.(spot.id)}
+                />
+                {active && (
+                  <text x={spot.cx} y={spot.cy - 6.5} textAnchor="middle" fontSize="2.6" fill="#0d5f8a">
+                    {spot.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+
         {state.isProjected && (
           <g>
             <rect x="68" y="4" width="28" height="8" rx="4" fill="#2b7a78" opacity="0.95" />
@@ -149,7 +197,7 @@ export function LungViz({ state, seedKey }: Props) {
         )}
 
         <text x="4" y="98" fontSize="4" fill="#2d211a">
-          Dirtiness {(state.overallDirtiness * 100).toFixed(0)}% • Day {state.previewDays}
+          Recovery {(state.recoveryPercent * 100).toFixed(0)}% • Day {state.previewDays}
         </text>
       </svg>
 
@@ -158,6 +206,7 @@ export function LungViz({ state, seedKey }: Props) {
           ? `Previewing day ${state.previewDays} (current streak: ${state.daysSinceQuit} days).`
           : `Today is day ${state.daysSinceQuit} smoke-free.`}
       </div>
+      <div className="viz-hint">Tap a highlighted region to ask questions about that part.</div>
     </section>
   );
 }
