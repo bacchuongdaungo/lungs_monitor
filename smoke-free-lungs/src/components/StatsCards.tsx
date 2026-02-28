@@ -70,6 +70,21 @@ export function StatsCards({ state }: Props) {
         </div>
 
         <div className="stat-card">
+          <span className="stat-label">Estimated resting pulse</span>
+          <strong className="stat-value">{state.restingHeartRateBpm.toFixed(0)} bpm</strong>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">Estimated breathing rate</span>
+          <strong className="stat-value">{state.respirationRatePerMin.toFixed(1)} breaths/min</strong>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">BMI estimate</span>
+          <strong className="stat-value">{state.bmi.toFixed(1)}</strong>
+        </div>
+
+        <div className="stat-card">
           <span className="stat-label">Brand chemistry</span>
           <strong className="stat-value">
             {state.nicotineMgPerCig.toFixed(1)}mg Nic / {state.tarMgPerCig.toFixed(0)}mg Tar

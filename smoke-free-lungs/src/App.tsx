@@ -10,6 +10,7 @@ import { MethodPanel } from "./components/MethodPanel";
 import { RecoveryActivity } from "./components/RecoveryActivity";
 import { StatsCards } from "./components/StatsCards";
 import { TimelineScrubber } from "./components/TimelineScrubber";
+import { LungsScene } from "./features/lungs";
 import { getEarnedBadgeIds, mergeEarnedBadgeIds, MILESTONE_BADGES } from "./milestones";
 import type { LungPartId } from "./lungKnowledge";
 import {
@@ -27,6 +28,16 @@ import {
 import { loadStoredState, saveStoredState } from "./storage";
 
 const clampPreview = (value: number, maxDays: number) => Math.max(0, Math.min(maxDays, Math.round(value)));
+
+const VIZ_PART_BUTTONS: readonly { id: LungPartId; label: string }[] = [
+  { id: "trachea", label: "Trachea" },
+  { id: "bronchi", label: "Bronchi" },
+  { id: "left-upper-lobe", label: "Left Upper" },
+  { id: "left-lower-lobe", label: "Left Lower" },
+  { id: "right-upper-lobe", label: "Right Upper" },
+  { id: "right-middle-lobe", label: "Right Middle" },
+  { id: "right-lower-lobe", label: "Right Lower" },
+] as const;
 
 function defaultSmokingStartISO(now = new Date()): string {
   const start = new Date(now);
@@ -61,6 +72,7 @@ export default function App() {
   const [draftInputs, setDraftInputs] = useState<Inputs>(() => initialInputs);
   const [isEditing, setIsEditing] = useState<boolean>(() => !initialState);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
+  const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>(() => {
     const sourceInputs = initialState?.inputs ?? defaultInputs();
     const persisted = initialState?.earnedBadgeIds ?? [];
@@ -158,12 +170,64 @@ export default function App() {
         </article>
 
         <article className="card card--viz">
-          <LungViz
-            state={state}
-            seedKey={seedKey}
-            selectedPartId={selectedPartId}
-            onSelectPart={setSelectedPartId}
-          />
+          <section className="viz-shell">
+            <div className="viz-head">
+              <h2 className="section-title">Lung Visualization</h2>
+              <div className="viz-mode-toggle">
+                <button
+                  type="button"
+                  className={`chip ${vizMode === "2d" ? "chip--primary" : ""}`}
+                  onClick={() => setVizMode("2d")}
+                >
+                  2D
+                </button>
+                <button
+                  type="button"
+                  className={`chip ${vizMode === "3d" ? "chip--primary" : ""}`}
+                  onClick={() => setVizMode("3d")}
+                >
+                  3D
+                </button>
+              </div>
+            </div>
+            <p className="section-subtitle">
+              Pick a lung component from buttons or directly on the model.
+            </p>
+
+            <div className="viz-part-buttons">
+              {VIZ_PART_BUTTONS.map((part) => (
+                <button
+                  key={part.id}
+                  type="button"
+                  className={`chip ${selectedPartId === part.id ? "chip--primary" : ""}`}
+                  onClick={() => setSelectedPartId(part.id)}
+                >
+                  {part.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="chip"
+                onClick={() => setSelectedPartId(null)}
+              >
+                Clear
+              </button>
+            </div>
+
+            {vizMode === "2d" ? (
+              <LungViz
+                state={state}
+                seedKey={seedKey}
+                selectedPartId={selectedPartId}
+                onSelectPart={setSelectedPartId}
+              />
+            ) : (
+              <LungsScene
+                selectedPartId={selectedPartId}
+                onSelectPart={setSelectedPartId}
+              />
+            )}
+          </section>
         </article>
 
         <article className="card card--coach">

@@ -7,6 +7,11 @@ export type LungPartId =
   | "alveoli"
   | "left-lung"
   | "right-lung"
+  | "left-upper-lobe"
+  | "left-lower-lobe"
+  | "right-upper-lobe"
+  | "right-middle-lobe"
+  | "right-lower-lobe"
   | "pleura";
 
 export type LungPart = {
@@ -52,6 +57,41 @@ export const LUNG_PARTS: LungPart[] = [
     functionText: "Same respiratory role as left lung with three lobes and large air volume.",
     discomfortText: "Can feel heavy or tight when mucus burden and inflammation are elevated.",
     whySmokersFeelIt: "Tobacco smoke raises oxidative stress and airway reactivity.",
+  },
+  {
+    id: "left-upper-lobe",
+    label: "Left upper lobe",
+    functionText: "Upper left lobe contributes strongly during inhalation and includes the cardiac notch contour.",
+    discomfortText: "Discomfort here can present as upper chest tightness or focal pleuritic pain.",
+    whySmokersFeelIt: "Irritation of segmental bronchi and pleural surfaces can amplify sensitivity in this region.",
+  },
+  {
+    id: "left-lower-lobe",
+    label: "Left lower lobe",
+    functionText: "Lower lobe handles high ventilation at the lung base during diaphragm-driven breathing.",
+    discomfortText: "Symptoms can feel deep and heavy, especially with mucus retention at the bases.",
+    whySmokersFeelIt: "Gravity-dependent mucus pooling and inflammation often burden basal lung zones.",
+  },
+  {
+    id: "right-upper-lobe",
+    label: "Right upper lobe",
+    functionText: "Upper right lobe supports gas exchange in the superior thoracic region.",
+    discomfortText: "Irritation may be felt as upper chest discomfort or sharp pain with deep breaths.",
+    whySmokersFeelIt: "Smoke-exposed airway branches can stay inflamed and reactive during early recovery.",
+  },
+  {
+    id: "right-middle-lobe",
+    label: "Right middle lobe",
+    functionText: "Middle right lobe bridges airflow between upper and lower right-lung regions.",
+    discomfortText: "Congestion here may feel like central-right chest pressure.",
+    whySmokersFeelIt: "Airway narrowing and mucus burden can disproportionately affect middle-lobe clearance.",
+  },
+  {
+    id: "right-lower-lobe",
+    label: "Right lower lobe",
+    functionText: "Lower right lobe expands with diaphragm descent and contributes major basal ventilation.",
+    discomfortText: "Discomfort often feels deep in the lower chest and can worsen with cough.",
+    whySmokersFeelIt: "Basal regions experience high volume changes and can trap secretions when cilia are impaired.",
   },
   {
     id: "pleura",

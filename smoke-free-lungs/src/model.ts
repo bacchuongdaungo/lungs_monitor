@@ -50,9 +50,11 @@ export type ValidatedInputs = {
   heightUnit: HeightUnit;
   weightKg: number;
   heightCm: number;
+  bmi: number;
   bmrKcalPerDay: number;
   metabolismFactor: number;
   metabolismCategory: MetabolismCategory;
+  baselineRestingHeartRateBpm: number;
   cigaretteBrandId: string;
   cigaretteBrandName: string;
   nicotineMgPerCig: number;
@@ -89,7 +91,11 @@ export type RecoveryState = LungSubscores & {
   ageYears: number;
   metabolismFactor: number;
   metabolismCategory: MetabolismCategory;
+  bmi: number;
   bmrKcalPerDay: number;
+  restingHeartRateBpm: number;
+  respirationRatePerMin: number;
+  breathCycleSeconds: number;
   cigaretteBrandId: string;
   cigaretteBrandName: string;
   nicotineMgPerCig: number;
@@ -284,6 +290,12 @@ function mifflinStJeorBmr(weightKg: number, heightCm: number, ageYears: number, 
   return base - 78;
 }
 
+function computeBmi(weightKg: number, heightCm: number): number {
+  const meters = heightCm / 100;
+  if (meters <= 0) return 0;
+  return weightKg / (meters * meters);
+}
+
 function computeMetabolismFactor(bmrKcalPerDay: number, weightKg: number): number {
   const baselineBmr = 1600;
   const bmrRatio = bmrKcalPerDay / baselineBmr;
@@ -299,6 +311,53 @@ function categorizeMetabolism(factor: number): MetabolismCategory {
   if (factor < 0.95) return "slower";
   if (factor > 1.07) return "faster";
   return "average";
+}
+
+function computeBaselineRestingHeartRateBpm(
+  ageYears: number,
+  bmi: number,
+  metabolismFactor: number,
+  biologicalSex: BiologicalSex,
+): number {
+  const sexOffset = biologicalSex === "male" ? -1 : biologicalSex === "female" ? 1 : 0;
+  const ageOffset = (ageYears - 35) * 0.22;
+  const bmiOffset = (bmi - 22) * 0.75;
+  const metabolismOffset = (1 - metabolismFactor) * 10;
+
+  const baseline = 70 + sexOffset + ageOffset + bmiOffset + metabolismOffset;
+  return clamp(baseline, 52, 95);
+}
+
+function computeDynamicCardioRates(
+  validated: ValidatedInputs,
+  curve: ReturnType<typeof computeCurveAtDay>,
+): { restingHeartRateBpm: number; respirationRatePerMin: number; breathCycleSeconds: number } {
+  const exposurePenalty = clamp(validated.effectivePackYears / 20, 0, 1) * 5;
+  const recoveryPenalty =
+    curve.nicotineDependence * 8 +
+    curve.inflammation * 6 +
+    curve.dopamineTolerance * 3;
+
+  const restingHeartRateBpm = clamp(
+    validated.baselineRestingHeartRateBpm + exposurePenalty + recoveryPenalty - curve.recoveryPercent * 3,
+    48,
+    112,
+  );
+
+  const respirationRatePerMin = clamp(
+    restingHeartRateBpm / 4.7 +
+      curve.inflammation * 3 +
+      curve.mucus * 2 -
+      curve.ciliaFunction * 1.2,
+    10,
+    24,
+  );
+
+  return {
+    restingHeartRateBpm,
+    respirationRatePerMin,
+    breathCycleSeconds: 60 / respirationRatePerMin,
+  };
 }
 
 function computeBrandChemistryMultiplier(tarMg: number, nicotineMg: number): number {
@@ -562,8 +621,15 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
   const packsPerWeek = (cigsPerDay / 20) * 7;
 
   const bmrKcalPerDay = mifflinStJeorBmr(weightKg, heightCm, ageYears, biologicalSex);
+  const bmi = computeBmi(weightKg, heightCm);
   const metabolismFactor = computeMetabolismFactor(bmrKcalPerDay, weightKg);
   const metabolismCategory = categorizeMetabolism(metabolismFactor);
+  const baselineRestingHeartRateBpm = computeBaselineRestingHeartRateBpm(
+    ageYears,
+    bmi,
+    metabolismFactor,
+    biologicalSex,
+  );
 
   const pack = packYears(cigsPerDay, smokingYears);
   const chemistryMultiplier = computeBrandChemistryMultiplier(brand.tarMg, brand.nicotineMg);
@@ -591,9 +657,11 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
       heightUnit,
       weightKg,
       heightCm,
+      bmi,
       bmrKcalPerDay,
       metabolismFactor,
       metabolismCategory,
+      baselineRestingHeartRateBpm,
       cigaretteBrandId: brand.id,
       cigaretteBrandName: brand.name,
       nicotineMgPerCig: brand.nicotineMg,
@@ -668,8 +736,15 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
   const brand = getBrandById(inputs.cigaretteBrandId) ?? getBrandById(DEFAULT_BRAND_ID);
 
   const bmrKcalPerDay = mifflinStJeorBmr(weightKg, heightCm, ageYears, biologicalSex);
+  const bmi = computeBmi(weightKg, heightCm);
   const metabolismFactor = computeMetabolismFactor(bmrKcalPerDay, weightKg);
   const metabolismCategory = categorizeMetabolism(metabolismFactor);
+  const baselineRestingHeartRateBpm = computeBaselineRestingHeartRateBpm(
+    ageYears,
+    bmi,
+    metabolismFactor,
+    biologicalSex,
+  );
 
   const pack = packYears(cigsPerDay, smokingYears);
   const chemistryMultiplier = computeBrandChemistryMultiplier(brand.tarMg, brand.nicotineMg);
@@ -696,9 +771,11 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
     heightUnit,
     weightKg,
     heightCm,
+    bmi,
     bmrKcalPerDay,
     metabolismFactor,
     metabolismCategory,
+    baselineRestingHeartRateBpm,
     cigaretteBrandId: brand.id,
     cigaretteBrandName: brand.name,
     nicotineMgPerCig: brand.nicotineMg,
@@ -724,6 +801,7 @@ export function computeRecoveryState(
 
   const day = clamp(Math.round(previewDays), 0, fullRecoveryDay);
   const curve = computeCurveAtDay(validated, day);
+  const cardioRates = computeDynamicCardioRates(validated, curve);
 
   return {
     packYears: validated.packYears,
@@ -748,7 +826,11 @@ export function computeRecoveryState(
     ageYears: validated.ageYears,
     metabolismFactor: validated.metabolismFactor,
     metabolismCategory: validated.metabolismCategory,
+    bmi: validated.bmi,
     bmrKcalPerDay: validated.bmrKcalPerDay,
+    restingHeartRateBpm: cardioRates.restingHeartRateBpm,
+    respirationRatePerMin: cardioRates.respirationRatePerMin,
+    breathCycleSeconds: cardioRates.breathCycleSeconds,
     cigaretteBrandId: validated.cigaretteBrandId,
     cigaretteBrandName: validated.cigaretteBrandName,
     nicotineMgPerCig: validated.nicotineMgPerCig,

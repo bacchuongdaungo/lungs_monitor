@@ -85,6 +85,20 @@ describe("App", () => {
     });
   });
 
+  it("keeps anatomy button selection in sync between 2D and 3D", async () => {
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^bronchi$/i }));
+    const bronchiHotspot = screen.getByTestId("hotspot-bronchi");
+    expect(bronchiHotspot).toHaveAttribute("fill-opacity", "0.2");
+
+    fireEvent.click(screen.getByRole("button", { name: /^3d$/i }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".lungs3d-selection")?.textContent).toContain("Bronchi");
+    });
+  });
+
   it("keeps recovery activity tied to current day since quit", async () => {
     render(<App />);
 

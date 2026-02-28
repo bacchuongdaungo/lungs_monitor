@@ -69,6 +69,30 @@
   grid-column: span 12;
 }
 
+.viz-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.viz-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.viz-mode-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.viz-part-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .section-title {
   margin: 0;
   font-family: "Baloo 2", "Trebuchet MS", sans-serif;
@@ -368,10 +392,67 @@
   width: min(560px, 100%);
 }
 
+.lung-scene {
+  border: 1px solid #f1d9cb;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 22%, #fffdfb 0%, #fff3eb 100%);
+}
+
+.lung-breathing {
+  --breath-duration: 4.2s;
+  --lung-scale: 1.03;
+  --lung-spread: 1px;
+  --lung-lift: 1px;
+}
+
+.lung-lobe {
+  transform-box: fill-box;
+}
+
+.lung-lobe--left {
+  transform-origin: 38px 84px;
+  animation: inhale-left var(--breath-duration) ease-in-out infinite;
+}
+
+.lung-lobe--right {
+  transform-origin: 82px 84px;
+  animation: inhale-right var(--breath-duration) ease-in-out infinite;
+}
+
+.heart-pulse {
+  transform-origin: 60px 70px;
+  animation: heart-pulse var(--heart-duration, 0.88s) ease-in-out infinite;
+}
+
+.diaphragm-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: diaphragm-wave var(--breath-duration) ease-in-out infinite;
+}
+
+.anatomy-region {
+  cursor: pointer;
+}
+
+.anatomy-region-label {
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: #ffffff;
+  stroke-width: 0.85;
+}
+
 .viz-caption {
   margin-top: 10px;
   text-align: center;
   color: #35524c;
+  font-weight: 700;
+}
+
+.viz-vitals {
+  margin-top: 6px;
+  text-align: center;
+  color: #2f5750;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
@@ -382,12 +463,115 @@
   font-size: 0.88rem;
 }
 
-.hotspot-ring {
-  cursor: pointer;
+.lungs3d-section {
+  display: grid;
+  gap: 10px;
 }
 
-.hotspot-ring:hover {
-  opacity: 0.3;
+.lungs3d-controls {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 10px;
+}
+
+.lungs3d-control {
+  display: grid;
+  gap: 6px;
+  color: #2a4e47;
+  font-weight: 700;
+}
+
+.lungs3d-control input[type="range"] {
+  width: 100%;
+  accent-color: #2b7a78;
+}
+
+.lungs3d-posture {
+  display: grid;
+  gap: 6px;
+  color: #2a4e47;
+  font-weight: 700;
+}
+
+.lungs3d-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lungs3d-selection {
+  color: #254741;
+}
+
+.lungs3d-stage {
+  width: 100%;
+  height: 420px;
+  border: 1px solid #ebd3c4;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fffaf7 0%, #fff1e8 100%);
+}
+
+.lungs3d-fallback {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  color: #496a63;
+  font-weight: 700;
+}
+
+.lungs3d-disclaimer {
+  margin: 0;
+  color: #5a7771;
+  font-size: 0.86rem;
+}
+
+@keyframes inhale-left {
+  0%,
+  100% {
+    transform: translateX(0) translateY(0) scale(1);
+  }
+  50% {
+    transform: translateX(calc(var(--lung-spread) * -1)) translateY(calc(var(--lung-lift) * -1))
+      scale(var(--lung-scale));
+  }
+}
+
+@keyframes inhale-right {
+  0%,
+  100% {
+    transform: translateX(0) translateY(0) scale(1);
+  }
+  50% {
+    transform: translateX(var(--lung-spread)) translateY(calc(var(--lung-lift) * -1))
+      scale(var(--lung-scale));
+  }
+}
+
+@keyframes heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.09);
+  }
+  45% {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes diaphragm-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.2px);
+  }
 }
 
 .cilia-group path {
@@ -694,6 +878,14 @@
   .split-input-row {
     grid-template-columns: 1fr;
   }
+
+  .lungs3d-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .lungs3d-stage {
+    height: 360px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -711,5 +903,10 @@
 
   .coach-row {
     flex-direction: column;
+  }
+
+  .viz-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

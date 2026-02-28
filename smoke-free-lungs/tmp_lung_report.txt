@@ -1,0 +1,611 @@
+
+
+=== PAGE 1 ===
+Human lung anatomy and motion for a realistic,
+BPM-driven lung visualization
+Executive summary
+A scientifically grounded “breathing” animation is best modeled as a time-varying  lung volume curve
+driven by respiratory rate (breaths per minute; often abbreviated RR or brpm) and tidal volume (TV), with
+deformation dominated by diaphragm descent (vertical expansion) plus rib cage expansion (transverse
++  anteroposterior).  In  normal  quiet  breathing,  inspiration  is  primarily  active  (diaphragm/external
+intercostals) and expiration is largely passive (elastic recoil). 
+For anatomically accurate region selection, the practical convention is to define selectable regions as lobes
+(RUL/RML/RLL,  LUL/LLL)  and  optionally  bronchopulmonary  segments (≈10  right,  ≈8–9  left).  These
+regions  have  clinically  stable  boundaries  (fissures  for  lobes;  segmental  bronchus-based  partitions  for
+segments) and map cleanly to either (a) separate meshes in 3D, or (b) SVG/Path2D masks in 2D that can
+deform along with the visual. 
+To  avoid  “redrawing  lungs  forever ,”  the  highest-leverage  move  is  to  adopt  3D  lung  assets (preferably
+already  split  into  lobes/segments  or  with  identifiable  submeshes),  convert  them  to  glTF/GLB for  web/
+mobile runtime loading, and drive breathing via blend shapes (morph targets) or a lightweight parametric
+deformation (scale/translate/shear) that approximates diaphragm + chest wall mechanics. glTF is explicitly
+designed  for  efficient  runtime  delivery;  you  can  further  reduce  size  with  mesh  decimation  and  Draco
+compression. 
+Key anatomy for realistic visuals and selection masks
+Human lungs are asymmetric but follow a consistent topography: each lung has an  apex (superior), a
+concave base resting on the diaphragm, and named surfaces/borders that are stable landmarks for 2D/3D
+mapping. The left lung has a cardiac notch along the anterior border (space for the heart), which is useful
+as a “signature shape feature” for selection and silhouette matching. 
+The lobar anatomy is the first “sweet spot” for region selection: - Right lung: upper (RUL), middle (RML),
+lower  (RLL),  separated  by  horizontal and  oblique fissures.  -  Left  lung: upper  (LUL)  and  lower  (LLL),
+separated by an oblique fissure. 
+If  you  need  finer  granularity,  lungs  subdivide  into  bronchopulmonary  segments,  each  supplied  by  a
+segmental (tertiary) bronchus; these are commonly listed as ~10 segments on the right and ~8–9 on the
+left, with some naming variation on the left. This segmentation is clinically meaningful, and the bronchial
+tree hierarchy (trachea → main bronchi → lobar bronchi → segmental bronchi) gives you a principled way to
+define region IDs beyond “random circles.” 
+1
+2
+3
+4
+4
+2
+1
+
+=== PAGE 2 ===
+The  pleura matters for motion modeling: lungs are covered by  visceral pleura and the thoracic wall by
+parietal  pleura,  with  a  thin  pleural  space  that  enables  low-friction  sliding.  Many  teaching  sources
+emphasize that lungs are “passive” in the sense that ventilation is driven by thoracic/diaphragm movement,
+with the lung following due to pleural coupling. This directly supports an animation strategy where you
+simulate diaphragm/chest wall deformation rather than “lungs magically expanding themselves.” 
+Practical landmarks to bake into 2D/3D selection masks (high utility, low controversy): - Apex vs base (base
+conforms  to  diaphragm  dome).  -  Anterior  border  +  cardiac  notch (left).  -  Hilum/root  region (where
+bronchi/vessels enter), typically medial; useful as a “non-selectable anchor zone” for stable UI placement.
+Respiratory mechanics and mapping BPM to a volume curve
+A  realistic  breathing  loop  needs  three  coupled  elements:  rate,  timing  (inspiratory  vs  expiratory
+duration), and amplitude (tidal volume).
+Baseline adult parameter ranges (typical, not diagnostic): - Resting respiratory rate: commonly cited in
+the ~12–20 breaths/min range for adults at rest. 
+- Tidal volume: often summarized around ~0.5 L per breath (≈500 mL) in an average adult male and ~0.4 L
+(≈400 mL) in an average healthy adult female during quiet breathing. 
+- Anatomical dead space: often approximated as ~150 mL (conducting airways), which is why shallow rapid
+breathing is inefficient for gas exchange. 
+-  Inspiratory:expiratory  timing:  a  commonly  taught  “normal”  I:E  is  approximately  1:2 (expiration  ~2×
+inspiration), with longer expiration in obstructive disease contexts. 
+Mechanics  you  can  map  to  transforms: -  Diaphragm  contraction  increases  the  vertical  thoracic
+dimension (central tendon pulled inferiorly; diaphragm flattens). 
+- Rib motion increases transverse (bucket-handle) and anteroposterior (pump-handle) dimensions. 
+- Quiet expiration is typically passive recoil after inspiratory muscles relax. 
+Magnitude  for  “how  much  things  move”: diaphragm  excursion  measured  by  ultrasound  in  healthy
+populations is on the order of a couple cm during quiet breathing, increasing with deep breathing; one
+large reference study reports mean excursions around ~2.3 cm during quiet breathing and ~5.3–5.5 cm
+during deep breathing (supine ultrasound), and also summarizes classic ranges like ~1–2 cm tidal vs ~7–11
+cm deep inspiration. 
+Driving the loop from BPM: if bpm means breaths per minute, cycle time is T = 60 / bpm seconds.
+Using I:E ≈ 1:2 gives inspiratory duration Ti ≈ T/3 and expiratory duration Te ≈ 2T/3. 
+Example: BPM → volume curve (TS-style pseudocode)
+// bpm: breaths per minute (respiratory rate)
+// tv: tidal volume in liters (e.g., 0.5 at rest)
+// ie: inspiratory:expiratory ratio, e.g., 1:2 => ieI=1, ieE=2
+functionlungVolumeLiters(tSec: number, bpm: number, tv: number, ieI= 1, ieE=
+5
+4
+6
+7
+8
+9
+10
+11
+12
+13
+9
+2
+
+=== PAGE 3 ===
+2) {
+constT = 60/ bpm; // cycle duration
+constphase= ((tSec% T) + T) % T;
+constTi= T * (ieI/ (ieI+ ieE));
+constTe= T - Ti;
+// Smooth inhale: half-cosine from 0 -> tv
+if(phase< Ti) {
+constx = phase/ Ti; // 0..1
+returntv* 0.5* (1 - Math.cos(Math.PI* x));
+}
+// Passive-ish exhale: exponential decay from tv -> 0
+// k controls "how fast" you empty; choose k so curve hits near 0 at Te
+consty = (phase- Ti) / Te; // 0..1
+constk = 4.0;
+returntv* Math.exp(-k * y);
+}
+This structure matches the idea that inspiration is actively shaped while expiration can be modeled as
+recoil/decay. 
+If you want to “deduce BPM from body metrics”: physiology references note that heart rate, respiratory
+rate, and tidal volume all tend to increase with metabolic demand/activity, but inferring breathing rate from
+heart  rate  alone  is  not  reliably  person-invariant.  A  pragmatic  app  convention  is:  let  users  input  brpm
+directly,  or  select  “rest  /  normal  activity  /  exercise,”  using  published  nominal  defaults  (e.g.,  a  paper
+summarizing 12 bpm & 0.5 L at rest, and higher values for activity). 
+Region mapping and anatomically accurate selection
+The core requirement is: whatever deforms visually must also deform for hit-testing, otherwise the user
+will tap “lower lobe” and hit an old mask.
+Coordinate systems you’ll encounter and how to not get wrecked
+If you source models from medical imaging (CT/MRI segmentations), coordinate conventions matter: -
+DICOM and most medical imaging software commonly store patient-space in LPS (Left–Posterior–Superior).
+- 3D Slicer  uses an internal RAS convention (Right–Anterior–Superior), which is closely related to LPS but
+differs by axis sign flips in the first two axes. 
+- glTF defines a right-handed coordinate system with +Y up and +Z forward (units in meters). 
+- Some NIH3D downloads explicitly mention  Y-up vs  Z-up depending on authoring tools and conversion
+paths, so you should treat “model up-axis” as asset metadata, not an assumption. 
+12
+14
+15
+16
+17
+18
+19
+3
+
+=== PAGE 4 ===
+A professional convention is to define one canonical coordinate space for your app (often glTF space in
+meters  for  web),  and  write  explicit  conversion  utilities  when  importing  medical-source  meshes/
+segmentations. 
+Replacing circles with anatomy-following masks
+You have three viable mask strategies, ordered from simplest to most scalable:
+SVG path regions (2D-first):
+Create separate SVG <path>s for each lobe (and optionally segments). The browser’s SVG hit-testing uses
+shape geometry, and APIs like  SVGGeometryElement.isPointInFill() /  isPointInStroke() can
+support programmatic hit tests. 
+This is the cleanest if your product stays 2D and your deformation is limited to transforms or path morphs.
+Canvas Path2D polygonal masks (2D with manual control):
+Store  each  region  as  a  Path2D and  use  CanvasRenderingContext2D.isPointInPath() (and
+isPointInStroke) for accurate hit detection even with complex shapes. 
+This is ideal if you want a single canvas pipeline (draw + hit-test) and consistent behavior across browsers.
+3D mesh picking (3D-first, best for realism):
+Split  the  lungs  into  distinct  meshes:  right_upper_lobe,  right_middle_lobe,  …  Then  selection
+becomes “which mesh did the ray hit?” Most engines support ray-based picking (Three.js Raycaster , Babylon
+picking, react-three-fiber event system). 
+The professional “don’t fight the math” approach for anatomy-following selection is: make lobes/segments
+distinct  nodes  in  the  scene  graph,  so  picking  returns  a  stable  region  ID.  This  avoids  fragile  2D
+approximations when the lung deforms in 3D. 
+Animation model for realistic lung motion
+A realistic aesthetic comes from matching where motion happens (spatial distribution) and how it changes
+over time (temporal waveform).
+Parametric breathing curve choices
+A sinusoid is a good baseline, but multiple physiology sources emphasize that inspiration and expiration
+differ mechanically (active vs passive), which supports an  asymmetric waveform (faster inhale, slower
+recoil exhale). 
+The  piecewise  cosine  +  exponential  example  earlier  is  a  simple  approximation  consistent  with  those
+mechanisms. 
+Amplitude scaling by tidal volume and regional deformation
+At-rest nominal values like ~0.5 L per breath are widely cited, and a published synthesis provides concrete
+“nominal” parameter sets across rest/activity (e.g., rest 12 bpm & 0.5 L; higher during activity/exercise). 
+20
+21
+22
+23
+24
+25
+26
+27
+4
+
+=== PAGE 5 ===
+For spatial realism, don’t inflate the lung uniformly. A physiology reference notes that ventilation is greater
+at the base than the apex (explained via pleural pressure gradients and regional compliance), which you
+can translate into a deformation gradient: larger displacement near the diaphragmatic/base region, smaller
+near the apex. 
+Mapping the curve to 2D/3D transforms
+A robust “good-enough realism” mapping is: -  Vertical expansion: translate lung base inferiorly during
+inspiration (diaphragm descent proxy) and slightly compress upward during expiration. 
+- Transverse expansion: scale X outward (bucket-handle proxy). 
+- Anteroposterior expansion: subtle scale/translation in Z (pump-handle proxy). 
+If you need higher realism in 3D without simulating tissue physics, blend shapes (morph targets) authored
+from an “exhale mesh” and an “inhale mesh” typically give the best cost/benefit, because the artist (or
+offline tool) can embed non-linear deformation once and runtime just interpolates. The idea aligns with
+NIH3D workflows that describe segmentation → polygonal model → optimization/remeshing in DCC tools
+(e.g., ZBrush) for downstream use. 
+Optional: phase offsets between lobes
+In  healthy  quiet  breathing,  it’s  reasonable  (and  simplest)  to  keep  lobes  in-phase  but  with  different
+amplitudes; published physiology focuses more strongly on regional magnitude differences than consistent
+“cartoon lag.” 
+If you want subtle phase offsets, historical literature reports measurable regional timing differences under
+certain conditions (e.g., airway closure dynamics), but this is niche enough that you should treat it as an
+optional stylistic enhancement rather than a universal truth. 
+3D assets and online graphics
+Recommended 3D model sources and licensing realities
+Below is a practical comparison of common sources for lung meshes. “Quality” here means  anatomical
+plausibility + mesh usability (clean topology, separated parts, reasonable polycount).
+Source
+Typical
+license
+pattern
+Cost Typical formatsStrengths Recommended
+use
+NIH 3D
+Varies per
+entry
+(commonly
+CC-BY or
+Public
+Domain)
+Free
+GLB/FBX/STL
+depending on
+entry
+Biomedical
+provenance;
+some models
+explicitly
+include lobes/
+bronchi; often
+already “viewer-
+ready”
+Best default for
+credible anatomy
++ permissive reuse
+28
+29
+11
+11
+30
+28
+31
+32
+33
+5
+
+=== PAGE 6 ===
+Source
+Typical
+license
+pattern
+Cost Typical formatsStrengths Recommended
+use
+BodyParts3D/
+AnatomographyCC BY-SA 2.1
+JP Free
+OBJ (whole
+sets; API-
+generated
+composites)
+Free whole-
+body atlas;
+programmatic
+part selection;
+consistent
+ontology
+mapping
+Great for building
+region IDs and
+generating masks
+programmatically 
+Sketchfab
+Mixed:
+Creative
+Commons
+models +
+store/
+standard
+licenses
+Free–
+Paid
+Many (often
+GLB/OBJ/FBX)
+Huge variety;
+can find scans
+and medical
+models quickly
+Use only with
+careful license
+review; see note
+below 
+TurboSquid
+Royalty-free
+license (with
+restrictions)
+Paid Many
+Commercial-
+grade assets;
+lots of choices
+Good if you need
+high quality fast
+and license fits
+distribution plan 
+CGTrader
+Royalty-free/
+common
+marketplace
+licenses
+Free–
+Paid Many
+Large
+marketplace;
+some medical
+models
+Similar to
+TurboSquid: verify
+redistribution
+constraints 
+NCI Imaging
+Data Commons
+Mostly CC-
+BY, small
+subset CC-
+NC (file-
+tagged)
+Free
+DICOM images
++ derived
+segmentations
+Lets you build
+your own
+“grounded”
+geometry via
+segmentation
+Best for research-
+grade provenance;
+heavier pipeline 
+Important licensing gotcha for a smoking-cessation app: some commercial 3D licenses explicitly restrict
+use in content that promotes “tobacco,” and some licenses also restrict redistribution or extraction of
+source assets. Even if your intent is anti-smoking, you should treat this as a red-flag clause and pick safer
+assets (e.g., CC-BY biomedical models) or get legal clarity. 
+Concrete NIH3D lung assets that match your use case
+NIH3D includes a “Lung, Male” reference organ distributed as GLB with a CC-BY label and notes that lung
+lobes and intrapulmonary bronchi are included (with certain upper-airway parts removed in a version). 
+Another NIH3D “Respiratory System (Lungs) – Visible Human Male” entry documents downloadable  FBX
+(separated  pieces  +  merged  variants),  plus  printable  STL,  and  explicitly  describes  coordinate-system
+differences across exported files. 
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+6
+
+=== PAGE 7 ===
+Making 3D assets lightweight for web/mobile
+Use  glTF/GLB as the runtime format: it’s royalty-free and designed to minimize asset size and runtime
+processing. 
+Then  apply:  -  Mesh  decimation  /  LOD (reduce  triangles  for  mobile  and  low-end  GPUs).  -  Draco
+compression via the KHR_draco_mesh_compression extension when size dominates load time. 
+- Post-processing tools like  glTF Transform for reproducible optimization pipelines (rather than manual
+“export roulette”). 
+Implementation guidance, performance, and UX safety
+Web stack and interaction
+For web/PWA, the common professional stack is: - Three.js + GLTFLoader for loading GLB/glTF. 
+- Or Babylon.js for a batteries-included engine with glTF importer support. 
+- Or React Three Fiber if you are already in React and want declarative scene composition + event
+handling. 
+For selection, ray-based picking is standard: - Three.js supports mouse picking via Raycaster . 
+- WebGL object/region picking can also be done by rendering an offscreen ID buffer (color-coded picking), a
+well-documented technique in WebGL tutorials. 
+Example: converting a 3D lung region into a 2D selection mask
+You can generate a deforming 2D mask from the 3D scene itself each frame (or when needed) by rendering
+just the region meshes into an offscreen render target:
+// Pseudocode for a Three.js-like pipeline
+// Goal: build a 2D mask (ImageData) for a specific region ID.
+// Technique: offscreen render with flat colors (ID buffer), then read pixels.
+asyncfunctionrenderRegionMask({
+renderer, scene, camera, width, height,
+regionMeshes, // array of meshes, each mapped to regionId
+targetRegionId
+}){
+// 1) Create offscreen render target
+constrt= newWebGLRenderTarget(width, height);
+// 2) Swap materials to flat-ID colors
+constoriginalMats= newMap();
+for(constmeshofregionMeshes) {
+originalMats.set(mesh, mesh.material);
+mesh.material= newMeshBasicMaterial({color:
+encodeIdColor(mesh.userData.regionId) });
+}
+47
+48
+49
+50 51
+52 53
+54
+55
+56
+57
+7
+
+=== PAGE 8 ===
+// 3) Render to offscreen buffer
+renderer.setRenderTarget(rt);
+renderer.clear();
+renderer.render(scene, camera);
+// 4) Read pixels and build boolean mask
+constpixels= newUint8Array(width* height* 4);
+renderer.readRenderTargetPixels(rt, 0, 0, width, height, pixels);
+constmask= newUint8Array(width* height);
+consttargetColor= encodeIdColor(targetRegionId);
+for(leti = 0; i < width* height; i++) {
+constr = pixels[4*i],g = pixels[4*i + 1],b = pixels[4*i + 2];
+mask[i] = (r ===targetColor.r &&g ===targetColor.g &&b ===
+targetColor.b) ? 1 : 0;
+}
+// 5) Restore materials + cleanup
+for(constmeshofregionMeshes) mesh.material= originalMats.get(mesh);
+renderer.setRenderTarget(null);
+rt.dispose();
+returnmask; // can be used for hit-testing, outlining, or generating SVG 
+offline
+}
+This approach leans on standard WebGL “picking” principles and typical engine capabilities (render targets +
+pixel readback). 
+Mobile and cross-platform options
+If you go beyond PWA: - Unity supports runtime glTF import via glTFast (Unity package documentation).
+- SceneKit  is a high-level Apple framework for importing/manipulating/rendering 3D assets (useful for
+iOS-specific builds). 
+- Flutter apps can embed Unity content via community packages (trade-off: heavier app size + pipeline
+complexity). 
+Performance and UX conventions
+Performance-friendly defaults for an educational visualization: - Cache GLB assets aggressively (service
+worker for PWA; local bundle for native), and keep textures modest. glTF is built for efficient loading, but
+you still pay for triangles, textures, and overdraw. 
+- Prefer fewer meshes with clear region IDs; if you need lots of segments, consider instancing or combining
+static geometry while keeping a lightweight picking strategy. 
+58
+59
+60
+61
+62
+63
+47
+64
+8
+
+=== PAGE 9 ===
+- Dispose GPU resources properly when swapping models/materials; Three.js documentation notes (for
+example) that image bitmaps are not auto-GC’d and require explicit disposal patterns. 
+UX and safety conventions (especially for “scientifically accurate” claims): - Present outputs as “educational
+visualization”  rather  than  diagnosis;  respiratory  parameters  vary  by  posture,  fitness,  disease,  and
+measurement method. 
+- Provide an accessible fallback (2D SVG) if WebGL fails; SVG/Canvas hit-testing is standardized and well-
+supported. 
+Minimal, coherent data flow
+flowchart LR
+  A[User inputs<br/>smoking history, quit date<br/>breaths/min or activity 
+level] --> B[Models<br/>pack-years -> damage index<br/>bpm -> volume curve]
+  B --> C[Deformation params<br/>volume(t), diaphragm/rib proxies<br/>regional 
+amplitude weights]
+  C --> D[Renderer<br/>2D SVG/Canvas or 3D glTF scene]
+  D --> E[Selection<br/>SVG/Path2D hit-test or 3D ray/ID picking]
+  E --> F[UI feedback<br/>highlight lobe/segment<br/>tooltips + milestones]
+The key convention here is that deformation parameters drive both rendering and selection/hit-testing so
+the “selectable anatomy” stays glued to the animated anatomy. 
+Brief snippets you asked for
+Pack-years → exposure index (TS-style pseudocode):
+// pack-years: packs/day * years; 1 pack = 20 cigarettes
+functionpackYears(cigsPerDay: number, years: number) {
+return(cigsPerDay/ 20) * years;
+}
+// Smooth saturating mapping (not a medical claim; just UI scaling)
+functionexposureIndex(py: number, k = 0.12) {
+return1 - Math.exp(-k * py);// 0..~1
+}
+Pack-year definition is standard (packs per day × years). 
+22.3 The Process of Breathing - Anatomy and Physiology 2e | OpenStax
+https://openstax.org/books/anatomy-and-physiology-2e/pages/22-3-the-process-of-breathing
+Anatomy, Thorax, Lungs - StatPearls - NCBI Bookshelf
+https://www.ncbi.nlm.nih.gov/books/NBK470197/
+51
+65
+66
+67
+68
+1 7 12 25 26 32
+2 4
+9
+
+=== PAGE 10 ===
+glTF - Runtime 3D Asset Delivery
+https://www.khronos.org/gltf/?utm_source=chatgpt.com
+Anatomy, Thorax, Pleurae - StatPearls - NCBI Bookshelf - NIH
+https://www.ncbi.nlm.nih.gov/books/NBK541079/?utm_source=chatgpt.com
+Rapid shallow breathing: MedlinePlus Medical Encyclopedia
+https://medlineplus.gov/ency/article/007198.htm?utm_source=chatgpt.com
+Respiratory Rate and Pattern - Clinical Methods - NCBI Bookshelf
+https://www.ncbi.nlm.nih.gov/books/NBK365/
+Respiratory rate | Ventilator 101 - The University of Iowa
+https://ventilator .course.uiowa.edu/respiratory-rate
+Anatomy, Thorax, Wall Movements - StatPearls - NCBI Bookshelf
+https://www.ncbi.nlm.nih.gov/books/NBK526023/
+Diaphragmatic excursion by ultrasound: reference values for the normal population; a cross-sectional
+study in Egypt - PMC 
+https://pmc.ncbi.nlm.nih.gov/articles/PMC9220962/
+The physics of human breathing: flow, timing, volume, and pressure parameters for
+normal, on-demand, and ventilator respiration - PMC 
+https://pmc.ncbi.nlm.nih.gov/articles/PMC8672270/
+Coordinate systems - 3D Slicer documentation - Read the Docs
+https://slicer .readthedocs.io/en/latest/user_guide/coordinate_systems.html?utm_source=chatgpt.com
+NIH 3D
+https://3d.nih.gov/?utm_source=chatgpt.com
+glTF™ 2.0 Specification - Khronos Registry
+https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html?utm_source=chatgpt.com
+NIH 3D
+https://3d.nih.gov/entries/3DPX-013408
+Scripting and Interactivity — SVG 2
+https://www.w3.org/TR/SVG2/interact.html?utm_source=chatgpt.com
+CanvasRenderingContext2D: isPointInPath() method
+https://developer .mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/isPointInPath?utm_source=chatgpt.com
+Raycaster – three.js docs
+https://threejs.org/docs/pages/Raycaster .html?utm_source=chatgpt.com
+The Radiology Assistant : Lung Segments and Bronchi
+https://radiologyassistant.nl/chest/lung-anatomy/lung-segments
+Physiology, Pulmonary Ventilation and Perfusion - StatPearls - NCBI Bookshelf
+https://www.ncbi.nlm.nih.gov/books/NBK539907/
+Demonstration of regional phase differences in ventilation ...
+https://pubmed.ncbi.nlm.nih.gov/422453/?utm_source=chatgpt.com
+3 47 52
+5 59
+6
+8
+9
+10 11 29 67
+13
+14 27 54 61 65
+15 17 20
+16 33
+18 36
+19 30 42 46
+21 38 66
+22
+23 40 56 64
+24
+28
+31
+10
+
+=== PAGE 11 ===
+Definition of pack year - NCI Dictionary of Cancer Terms
+https://www.cancer .gov/publications/dictionaries/cancer-terms/def/pack-year?utm_source=chatgpt.com
+BodyParts3D Information
+https://lifesciencedb.jp/bp3d/info_en/index.html
+Terms of Use
+https://sketchfab.com/terms?utm_source=chatgpt.com
+TurboSquid 3D Model License
+https://www.turbosquid.com/licensing?utm_source=chatgpt.com
+Royalty Free License
+https://help.cgtrader .com/hc/en-us/articles/360015124437-Royalty-Free-License?utm_source=chatgpt.com
+Imaging Data Commons | CRDC
+https://datacommons.cancer .gov/repository/imaging-data-commons
+License Agreement - Sketchfab
+https://sketchfab.com/licenses
+NIH 3D
+https://3d.nih.gov/entries/3DPX-021008
+KHR_draco_mesh_compression
+https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_draco_mesh_compression/README.md?
+utm_source=chatgpt.com
+glTF Transform
+https://gltf-transform.dev/?utm_source=chatgpt.com
+GLTFLoader – three.js docs
+https://threejs.org/docs/pages/GLTFLoader .html?utm_source=chatgpt.com
+glTF File Loader Plugin
+https://doc.babylonjs.com/features/featuresDeepDive/importers/glTF?utm_source=chatgpt.com
+Events - Introduction - React Three Fiber
+https://r3f.docs.pmnd.rs/api/events?utm_source=chatgpt.com
+WebGL Picking
+https://webglfundamentals.org/webgl/lessons/webgl-picking.html?utm_source=chatgpt.com
+Unity glTFast Documentation
+https://docs.unity3d.com/Packages/com.unity.cloud.gltfast%40latest/?utm_source=chatgpt.com
+SceneKit - Create 3D games and add 3D content to apps
+https://developer .apple.com/documentation/scenekit/?utm_source=chatgpt.com
+GitHub - juicycleff/flutter-unity-view-widget: Embeddable ...
+https://github.com/juicycleff/flutter-unity-view-widget?utm_source=chatgpt.com
+34 68
+35
+37
+39
+41
+43
+44
+45 50
+48
+49
+51
+53
+55
+57 58
+60
+62
+63
+11
