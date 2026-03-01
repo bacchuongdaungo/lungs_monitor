@@ -248,6 +248,23 @@
   min-width: 0;
 }
 
+.split-input--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.split-input--inline input {
+  min-width: 0;
+}
+
+.split-unit {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #35544f;
+  white-space: nowrap;
+}
+
 .derived-badge {
   margin-top: 8px;
   border-radius: 999px;
@@ -312,6 +329,114 @@
   color: #1d3a35;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.summary-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary-control input,
+.summary-control select {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #dab29a;
+  border-radius: 12px;
+  background: #fff8f3;
+  color: #1f2c28;
+  padding: 8px 10px;
+  font-size: 0.96rem;
+}
+
+.summary-control input:focus,
+.summary-control select:focus {
+  outline: 2px solid #2b7a78;
+  outline-offset: 1px;
+}
+
+.summary-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.summary-inline-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-height-input-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-inline-field {
+  display: inline-flex;
+  width: auto;
+}
+
+.summary-inline-field input {
+  width: clamp(88px, 18vw, 140px);
+}
+
+.summary-height-input-row .summary-inline-field--height-cm input {
+  width: clamp(72px, 13vw, 110px);
+}
+
+.summary-inline-field--double {
+  width: clamp(150px, 30vw, 220px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.summary-inline-field--double-compact {
+  width: auto;
+  grid-template-columns: repeat(2, auto);
+  gap: 6px;
+}
+
+.summary-inline-field--double input {
+  width: 100%;
+}
+
+.summary-inline-toggle-row {
+  margin-bottom: 0;
+}
+
+.summary-inline-toggle-row--height {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.summary-inline-toggle-row--height .unit-toggle {
+  white-space: nowrap;
+  padding: 4px 8px;
+}
+
+.summary-output {
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid #e7d6c8;
+  border-radius: 999px;
+  background: #fff8f3;
+  line-height: 1.3;
+}
+
+.value-unit {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .summary-sentence {
@@ -881,6 +1006,10 @@
 
   .lungs3d-controls {
     grid-template-columns: 1fr;
+  }
+
+  .summary-height-input-row {
+    flex-wrap: wrap;
   }
 
   .lungs3d-stage {

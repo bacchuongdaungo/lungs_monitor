@@ -55,7 +55,6 @@ describe("App", () => {
 
     const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
     fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(3) } });
-    fireEvent.click(screen.getByRole("button", { name: /submit smoking history/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("badge-day-3")).toHaveAttribute("data-unlocked", "true");
@@ -104,7 +103,6 @@ describe("App", () => {
 
     const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
     fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(12) } });
-    fireEvent.click(screen.getByRole("button", { name: /submit smoking history/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/today, day 12 since quit/i)).toBeInTheDocument();

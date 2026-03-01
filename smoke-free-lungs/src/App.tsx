@@ -69,8 +69,6 @@ export default function App() {
   const [initialState] = useState(() => loadStoredState());
   const [initialInputs] = useState<Inputs>(() => initialState?.inputs ?? defaultInputs());
   const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
-  const [draftInputs, setDraftInputs] = useState<Inputs>(() => initialInputs);
-  const [isEditing, setIsEditing] = useState<boolean>(() => !initialState);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>(() => {
@@ -87,11 +85,9 @@ export default function App() {
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
 
-  const validation = useMemo(() => validateInputs(draftInputs, now), [draftInputs, now]);
-  const draftSummary = useMemo(() => sanitizeInputs(draftInputs, now), [draftInputs, now]);
+  const validation = useMemo(() => validateInputs(inputs, now), [inputs, now]);
   const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
   const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
-  const canSubmit = validation.value != null;
 
   const effectivePreviewDays = useMemo(
     () => clampPreview(previewDays, fullRecoveryDay),
@@ -113,34 +109,19 @@ export default function App() {
 
   const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}`;
 
-  function handleDraftChange(key: keyof Inputs, value: Inputs[keyof Inputs]) {
-    setDraftInputs((current) => ({
+  function handleInputChange(key: keyof Inputs, value: Inputs[keyof Inputs]) {
+    setInputs((current) => ({
       ...current,
       [key]: value,
     }));
-  }
 
-  function handleSubmitHistory() {
-    if (!canSubmit) return;
-
-    const nowForUpdate = new Date();
-    setInputs(draftInputs);
-
-    const safeNext = sanitizeInputs(draftInputs, nowForUpdate);
-    const unlocked = getEarnedBadgeIds(daysSince(safeNext.quitDateISO, nowForUpdate));
-    setEarnedBadgeIds((persisted) => mergeEarnedBadgeIds(persisted, unlocked));
-    setPreviewDays(daysSince(safeNext.quitDateISO, nowForUpdate));
-    setIsEditing(false);
-  }
-
-  function handleEditHistory() {
-    setDraftInputs(inputs);
-    setIsEditing(true);
-  }
-
-  function handleCancelHistory() {
-    setDraftInputs(inputs);
-    setIsEditing(false);
+    if (key === "quitDateISO" && typeof value === "string") {
+      const currentDaysSinceQuit = daysSince(value);
+      setPreviewDays(currentDaysSinceQuit);
+      setEarnedBadgeIds((persisted) =>
+        mergeEarnedBadgeIds(persisted, getEarnedBadgeIds(currentDaysSinceQuit)),
+      );
+    }
   }
 
   return (
@@ -157,15 +138,10 @@ export default function App() {
       <section className="layout-grid">
         <article className="card card--intake">
           <InputForm
-            inputs={isEditing ? draftInputs : inputs}
+            inputs={inputs}
             errors={validation.errors}
-            summary={isEditing ? draftSummary : safeInputs}
-            isEditing={isEditing}
-            canSubmit={canSubmit}
-            onChange={handleDraftChange}
-            onSubmit={handleSubmitHistory}
-            onEdit={handleEditHistory}
-            onCancel={handleCancelHistory}
+            summary={safeInputs}
+            onChange={handleInputChange}
           />
         </article>
 

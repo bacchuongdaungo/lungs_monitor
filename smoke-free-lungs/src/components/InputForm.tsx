@@ -34,12 +34,7 @@ type Props = {
   inputs: Inputs;
   errors: InputErrors;
   summary: ValidatedInputs;
-  isEditing: boolean;
-  canSubmit: boolean;
   onChange: (key: keyof Inputs, value: Inputs[keyof Inputs]) => void;
-  onSubmit: () => void;
-  onEdit: () => void;
-  onCancel: () => void;
 };
 
 const SEX_OPTIONS: Array<{ id: BiologicalSex; label: string }> = [
@@ -123,17 +118,11 @@ function formatHeightValue(value: number, unit: HeightUnit): string {
   return `${feet} ft ${inches} in`;
 }
 
-export function InputForm({
-  inputs,
-  errors,
-  summary,
-  isEditing,
-  canSubmit,
-  onChange,
-  onSubmit,
-  onEdit,
-  onCancel,
-}: Props) {
+function toNumberOrEmpty(value: string): number | "" {
+  return value === "" ? "" : Number(value);
+}
+
+export function InputForm({ inputs, errors, summary, onChange }: Props) {
   const quantity = Number(inputs.consumptionQuantity);
   const intervalCount = Number(inputs.consumptionIntervalCount);
 
@@ -198,363 +187,380 @@ export function InputForm({
     onChange("heightValue", converted);
   }
 
-  if (!isEditing) {
-    return (
-      <section>
-        <div className="intake-summary-head">
-          <h2 className="section-title">Smoking History</h2>
-          <button type="button" className="chip" onClick={onEdit}>
-            Edit Information
-          </button>
-        </div>
-
-        <div className="summary-block">
-          <h3 className="method-heading">Smoking length</h3>
-          <div className="summary-grid">
-            {/* <div>Mode</div> */}
-            {/* <div>Start / End</div>
-            <strong>{summary.smokingStartDateISO} to {summary.quitDateISO}</strong> */}
-            <div>Total duration:</div>
-            <strong>{formatDurationFromYears(summary.smokingYears)}</strong>
-          </div>
-        </div>
-
-        <div className="summary-block">
-          <h3 className="method-heading">Smoking quantity/rate</h3>
-          <div className="summary-grid">
-            <div>Pattern:</div>
-            <strong>
-              {summary.consumptionQuantity} {summary.consumptionUnit} / {summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}
-            </strong>
-            <div>Derived rate:</div>
-            <strong>{summary.cigsPerDay.toFixed(2)} cigarettes/day</strong>
-            <div>Equivalent:</div>
-            <strong>{summary.packsPerWeek.toFixed(2)} packs/week</strong>
-          </div>
-        </div>
-
-        <div className="summary-block">
-          <h3 className="method-heading">Profile</h3>
-          <div className="summary-grid">
-            <div>Age:</div>
-            <strong>{summary.ageYears.toFixed(1)} years</strong>
-            <div>Sex:</div>
-            <strong>{summary.biologicalSex[0].toUpperCase() + summary.biologicalSex.slice(1)}</strong>
-            <div>Weight / Height:</div>
-            <strong>{summary.weightValue} {summary.weightUnit} / {formatHeightValue(summary.heightValue, summary.heightUnit)}</strong>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   const feetInches = inchesToFeetInches(typeof inputs.heightValue === "number" ? inputs.heightValue : 0);
+  const feetValue = feetInches.feet;
+  const inchesValue = feetInches.inches;
 
   return (
     <section>
       <h2 className="section-title">Smoking History</h2>
-      <p className="section-subtitle">Complete the sections, then submit to collapse into a one-screen summary.</p>
+      <p className="section-subtitle">Edit directly in this summary view. Changes apply instantly.</p>
 
-      <div className="intake-section">
+      <div className="summary-block">
         <h3 className="method-heading">Smoking length</h3>
+        <div className="summary-grid">
+          <div>Mode:</div>
+          <strong>
+            <div className="toggle-row">
+              <ToggleButton
+                active={inputs.smokingLengthMode === "exact_dates"}
+                label="Exact start and end dates"
+                icon={
+                  <svg viewBox="0 0 20 20" width="14" height="14">
+                    <rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                    <path d="M2 8h16" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                }
+                onClick={() => onChange("smokingLengthMode", "exact_dates")}
+              />
+              <ToggleButton
+                active={inputs.smokingLengthMode === "approx_years"}
+                label="Approximate years"
+                icon={
+                  <svg viewBox="0 0 20 20" width="14" height="14">
+                    <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" />
+                    <path d="M10 6v5l3 2" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                }
+                onClick={() => onChange("smokingLengthMode", "approx_years")}
+              />
+            </div>
+          </strong>
 
-        <div className="toggle-row">
-          <ToggleButton
-            active={inputs.smokingLengthMode === "exact_dates"}
-            label="Exact start and end dates"
-            icon={<svg viewBox="0 0 20 20" width="14" height="14"><rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M2 8h16" stroke="currentColor" strokeWidth="2" /></svg>}
-            onClick={() => onChange("smokingLengthMode", "exact_dates")}
-          />
-          <ToggleButton
-            active={inputs.smokingLengthMode === "approx_years"}
-            label="Approximate years"
-            icon={<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M10 6v5l3 2" stroke="currentColor" strokeWidth="2" fill="none" /></svg>}
-            onClick={() => onChange("smokingLengthMode", "approx_years")}
-          />
-        </div>
-
-        <div className="field-grid compact-grid">
           {inputs.smokingLengthMode === "exact_dates" ? (
             <>
-              <label className="field" htmlFor="smokingStartDateISO">
-                <span className="field-label">Start date</span>
-                <input
-                  id="smokingStartDateISO"
-                  name="smokingStartDateISO"
-                  type="date"
-                  value={inputs.smokingStartDateISO}
-                  onChange={(event) => onChange("smokingStartDateISO", event.target.value)}
-                />
-                {errors.smokingStartDateISO && <span className="field-error" role="alert">{errors.smokingStartDateISO}</span>}
-              </label>
-
-              <label className="field" htmlFor="quitDateISO">
-                <span className="field-label">End date (quit)</span>
-                <input
-                  id="quitDateISO"
-                  name="quitDateISO"
-                  type="date"
-                  value={inputs.quitDateISO}
-                  onChange={(event) => onChange("quitDateISO", event.target.value)}
-                />
-                {errors.quitDateISO && <span className="field-error" role="alert">{errors.quitDateISO}</span>}
-              </label>
+              <div>Start date:</div>
+              <strong>
+                <label className="summary-control" htmlFor="smokingStartDateISO">
+                  <input
+                    id="smokingStartDateISO"
+                    name="smokingStartDateISO"
+                    type="date"
+                    aria-label="Start date"
+                    value={inputs.smokingStartDateISO}
+                    onChange={(event) => onChange("smokingStartDateISO", event.target.value)}
+                  />
+                  {errors.smokingStartDateISO ? <span className="field-error" role="alert">{errors.smokingStartDateISO}</span> : null}
+                </label>
+              </strong>
             </>
           ) : (
             <>
-              <label className="field" htmlFor="approxSmokingYears">
-                <span className="field-label">Approximate smoking years</span>
-                <input
-                  id="approxSmokingYears"
-                  name="approxSmokingYears"
-                  type="number"
-                  step={0.25}
-                  value={inputs.approxSmokingYears}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    onChange("approxSmokingYears", value === "" ? "" : Number(value));
-                  }}
-                />
-                <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years.</span>
-                {errors.approxSmokingYears && <span className="field-error" role="alert">{errors.approxSmokingYears}</span>}
-              </label>
-
-              <label className="field" htmlFor="quitDateISO">
-                <span className="field-label">End date (quit)</span>
-                <input
-                  id="quitDateISO"
-                  name="quitDateISO"
-                  type="date"
-                  value={inputs.quitDateISO}
-                  onChange={(event) => onChange("quitDateISO", event.target.value)}
-                />
-                {errors.quitDateISO && <span className="field-error" role="alert">{errors.quitDateISO}</span>}
-              </label>
+              <div>Approximate years:</div>
+              <strong>
+                <label className="summary-control" htmlFor="approxSmokingYears">
+                  <input
+                    id="approxSmokingYears"
+                    name="approxSmokingYears"
+                    type="number"
+                    step={0.25}
+                    aria-label="Approximate smoking years"
+                    value={inputs.approxSmokingYears}
+                    onChange={(event) => onChange("approxSmokingYears", toNumberOrEmpty(event.target.value))}
+                  />
+                  <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years.</span>
+                  {errors.approxSmokingYears ? <span className="field-error" role="alert">{errors.approxSmokingYears}</span> : null}
+                </label>
+              </strong>
             </>
           )}
-        </div>
 
-        <div className="derived-badge">
-          Smoking length estimate: {yearsText(summary.smokingStartDateISO, summary.quitDateISO)}
-        </div>
-      </div>
-
-      <div className="intake-section">
-        <h3 className="method-heading">Smoking quantity/rate</h3>
-
-        <div className="dual-box-grid">
-          <label className="field metric-box" htmlFor="consumptionQuantity">
-            <span className="field-label">Quantity</span>
-            <input
-              id="consumptionQuantity"
-              name="consumptionQuantity"
-              type="number"
-              step={0.1}
-              value={inputs.consumptionQuantity}
-              onChange={(event) => {
-                const value = event.target.value;
-                onChange("consumptionQuantity", value === "" ? "" : Number(value));
-              }}
-            />
-            <div className="toggle-row">
-              <ToggleButton
-                active={inputs.consumptionUnit === "cigarettes"}
-                label="Cigarettes"
-                icon={<svg viewBox="0 0 20 20" width="14" height="14"><rect x="2" y="7" width="13" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="2" /><rect x="15" y="7" width="3" height="6" rx="1" fill="currentColor" /></svg>}
-                onClick={() => handleConsumptionUnitChange("cigarettes")}
-              />
-              <ToggleButton
-                active={inputs.consumptionUnit === "packs"}
-                label="Packs"
-                icon={<svg viewBox="0 0 20 20" width="14" height="14"><rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M3 8h14" stroke="currentColor" strokeWidth="2" /></svg>}
-                onClick={() => handleConsumptionUnitChange("packs")}
-              />
-            </div>
-            <span className="field-hint">0 to {MAX_CONSUMPTION_QUANTITY}</span>
-            {errors.consumptionQuantity && <span className="field-error" role="alert">{errors.consumptionQuantity}</span>}
-          </label>
-
-          <label className="field metric-box" htmlFor="consumptionIntervalCount">
-            <span className="field-label">Time interval</span>
-            <input
-              id="consumptionIntervalCount"
-              name="consumptionIntervalCount"
-              type="number"
-              step={1}
-              value={inputs.consumptionIntervalCount}
-              onChange={(event) => {
-                const value = event.target.value;
-                onChange("consumptionIntervalCount", value === "" ? "" : Number(value));
-              }}
-            />
-            <div className="toggle-row">
-              <ToggleButton
-                active={inputs.consumptionIntervalUnit === "days"}
-                label="Days"
-                icon={<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M10 1v3M10 16v3M1 10h3M16 10h3" stroke="currentColor" strokeWidth="2" /></svg>}
-                onClick={() => handleConsumptionIntervalUnitChange("days")}
-              />
-              <ToggleButton
-                active={inputs.consumptionIntervalUnit === "weeks"}
-                label="Weeks"
-                icon={<svg viewBox="0 0 20 20" width="14" height="14"><rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M2 8h16M7 3v4M13 3v4" stroke="currentColor" strokeWidth="2" /></svg>}
-                onClick={() => handleConsumptionIntervalUnitChange("weeks")}
-              />
-            </div>
-            <span className="field-hint">{MIN_CONSUMPTION_INTERVAL_COUNT} to {MAX_CONSUMPTION_INTERVAL_COUNT}</span>
-            {errors.consumptionIntervalCount && <span className="field-error" role="alert">{errors.consumptionIntervalCount}</span>}
-          </label>
-        </div>
-
-        <div className="derived-badge">
-          {estimatedCigsPerDay == null
-            ? "Enter quantity + interval to derive daily rate."
-            : `Derived smoking rate: ${estimatedCigsPerDay.toFixed(2)} cigarettes/day`}
-        </div>
-      </div>
-
-      <div className="intake-section">
-        <h3 className="method-heading">Body metrics</h3>
-
-        <div className="field-grid compact-grid">
-          <label className="field" htmlFor="dobISO">
-            <span className="field-label">Date of birth</span>
-            <input
-              id="dobISO"
-              name="dobISO"
-              type="date"
-              value={inputs.dobISO}
-              onChange={(event) => onChange("dobISO", event.target.value)}
-            />
-            <div className="derived-age">Age: {ageYears == null ? "--" : `${ageYears.toFixed(1)} years`}</div>
-            {errors.dobISO && <span className="field-error" role="alert">{errors.dobISO}</span>}
-          </label>
-
-          <label className="field" htmlFor="biologicalSex">
-            <span className="field-label">Biological sex</span>
-            <select
-              id="biologicalSex"
-              name="biologicalSex"
-              value={inputs.biologicalSex}
-              onChange={(event) => onChange("biologicalSex", event.target.value as BiologicalSex)}
-            >
-              {SEX_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-            {errors.biologicalSex && <span className="field-error" role="alert">{errors.biologicalSex}</span>}
-          </label>
-        </div>
-
-        <div className="dual-box-grid body-metrics-grid">
-          <label className="field metric-box" htmlFor="weightValue">
-            <span className="field-label">Weight</span>
-            <input
-              id="weightValue"
-              name="weightValue"
-              type="number"
-              step={0.1}
-              value={inputs.weightValue}
-              onChange={(event) => {
-                const value = event.target.value;
-                onChange("weightValue", value === "" ? "" : Number(value));
-              }}
-            />
-            <div className="unit-toggle-row">
-              <button
-                type="button"
-                className={`unit-toggle ${inputs.weightUnit === "kg" ? "unit-toggle--active" : ""}`}
-                onClick={() => handleWeightUnitChange("kg")}
-              >
-                kg
-              </button>
-              <button
-                type="button"
-                className={`unit-toggle ${inputs.weightUnit === "lb" ? "unit-toggle--active" : ""}`}
-                onClick={() => handleWeightUnitChange("lb")}
-              >
-                lbs
-              </button>
-            </div>
-            <span className="field-hint">Supported: {weightRangeText(inputs.weightUnit)}</span>
-            {errors.weightValue && <span className="field-error" role="alert">{errors.weightValue}</span>}
-          </label>
-
-          <label className="field metric-box" htmlFor="heightValue">
-            <span className="field-label">Height</span>
-            <div className="unit-toggle-row">
-              <button
-                type="button"
-                className={`unit-toggle ${inputs.heightUnit === "cm" ? "unit-toggle--active" : ""}`}
-                onClick={() => handleHeightUnitChange("cm")}
-              >
-                cm
-              </button>
-              <button
-                type="button"
-                className={`unit-toggle ${inputs.heightUnit === "in" ? "unit-toggle--active" : ""}`}
-                onClick={() => handleHeightUnitChange("in")}
-              >
-                feet-inches
-              </button>
-            </div>
-
-            {inputs.heightUnit === "cm" ? (
+          <div>End date (quit):</div>
+          <strong>
+            <label className="summary-control" htmlFor="quitDateISO">
               <input
-                id="heightValue"
-                name="heightValue"
-                type="number"
-                step={0.1}
-                value={inputs.heightValue}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  onChange("heightValue", value === "" ? "" : Number(value));
-                }}
+                id="quitDateISO"
+                name="quitDateISO"
+                type="date"
+                aria-label="End date (quit)"
+                value={inputs.quitDateISO}
+                onChange={(event) => onChange("quitDateISO", event.target.value)}
               />
-            ) : (
-              <div className="split-input-row">
-                <label className="split-input">
-                  <span className="field-label">Feet</span>
-                  <input
-                    type="number"
-                    step={1}
-                    min={0}
-                    value={feetInches.feet}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      onChange("heightValue", feetInchesToTotalInches(value, feetInches.inches));
-                    }}
-                  />
-                </label>
-                <label className="split-input">
-                  <span className="field-label">Inches</span>
-                  <input
-                    type="number"
-                    step={1}
-                    min={0}
-                    value={feetInches.inches}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      onChange("heightValue", feetInchesToTotalInches(feetInches.feet, value));
-                    }}
-                  />
-                </label>
-              </div>
-            )}
+              {errors.quitDateISO ? <span className="field-error" role="alert">{errors.quitDateISO}</span> : null}
+            </label>
+          </strong>
 
-            <span className="field-hint">Supported: {heightRangeText(inputs.heightUnit)}</span>
-            {errors.heightValue && <span className="field-error" role="alert">{errors.heightValue}</span>}
-          </label>
+          <div>Total duration:</div>
+          <strong>{formatDurationFromYears(summary.smokingYears)}</strong>
+        </div>
+
+        <p className="summary-sentence">Smoking length estimate: {yearsText(summary.smokingStartDateISO, summary.quitDateISO)}</p>
+      </div>
+
+      <div className="summary-block">
+        <h3 className="method-heading">Smoking quantity/rate</h3>
+        <div className="summary-grid">
+          <div>Quantity:</div>
+          <strong>
+            <div className="summary-control">
+              <div className="summary-inline-control-row">
+                <label className="summary-inline-field" htmlFor="consumptionQuantity">
+                <input
+                  id="consumptionQuantity"
+                  name="consumptionQuantity"
+                  type="number"
+                  step={0.1}
+                  aria-label="Quantity"
+                  value={inputs.consumptionQuantity}
+                  onChange={(event) => onChange("consumptionQuantity", toNumberOrEmpty(event.target.value))}
+                />
+                </label>
+                <div className="toggle-row summary-inline-toggle-row">
+                  <ToggleButton
+                    active={inputs.consumptionUnit === "cigarettes"}
+                    label="Cigarettes"
+                    icon={
+                      <svg viewBox="0 0 20 20" width="14" height="14">
+                        <rect x="2" y="7" width="13" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="2" />
+                        <rect x="15" y="7" width="3" height="6" rx="1" fill="currentColor" />
+                      </svg>
+                    }
+                    onClick={() => handleConsumptionUnitChange("cigarettes")}
+                  />
+                  <ToggleButton
+                    active={inputs.consumptionUnit === "packs"}
+                    label="Packs"
+                    icon={
+                      <svg viewBox="0 0 20 20" width="14" height="14">
+                        <rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                        <path d="M3 8h14" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    }
+                    onClick={() => handleConsumptionUnitChange("packs")}
+                  />
+                </div>
+                <span className="field-hint">0 to {MAX_CONSUMPTION_QUANTITY}</span>
+              </div>
+              {errors.consumptionQuantity ? <span className="field-error" role="alert">{errors.consumptionQuantity}</span> : null}
+            </div>
+          </strong>
+
+          <div>Time interval:</div>
+          <strong>
+            <div className="summary-control">
+              <div className="summary-inline-control-row">
+                <label className="summary-inline-field" htmlFor="consumptionIntervalCount">
+                <input
+                  id="consumptionIntervalCount"
+                  name="consumptionIntervalCount"
+                  type="number"
+                  step={1}
+                  aria-label="Time interval"
+                  value={inputs.consumptionIntervalCount}
+                  onChange={(event) => onChange("consumptionIntervalCount", toNumberOrEmpty(event.target.value))}
+                />
+                </label>
+                <div className="toggle-row summary-inline-toggle-row">
+                  <ToggleButton
+                    active={inputs.consumptionIntervalUnit === "days"}
+                    label="Days"
+                    icon={
+                      <svg viewBox="0 0 20 20" width="14" height="14">
+                        <circle cx="10" cy="10" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
+                        <path d="M10 1v3M10 16v3M1 10h3M16 10h3" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    }
+                    onClick={() => handleConsumptionIntervalUnitChange("days")}
+                  />
+                  <ToggleButton
+                    active={inputs.consumptionIntervalUnit === "weeks"}
+                    label="Weeks"
+                    icon={
+                      <svg viewBox="0 0 20 20" width="14" height="14">
+                        <rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                        <path d="M2 8h16M7 3v4M13 3v4" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    }
+                    onClick={() => handleConsumptionIntervalUnitChange("weeks")}
+                  />
+                </div>
+                <span className="field-hint">{MIN_CONSUMPTION_INTERVAL_COUNT} to {MAX_CONSUMPTION_INTERVAL_COUNT}</span>
+              </div>
+              {errors.consumptionIntervalCount ? <span className="field-error" role="alert">{errors.consumptionIntervalCount}</span> : null}
+            </div>
+          </strong>
+
+          <div>Pattern:</div>
+          <strong>
+            <span className="value-unit">{summary.consumptionQuantity} {summary.consumptionUnit}</span>
+            {" / "}
+            <span className="value-unit">{summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}</span>
+          </strong>
+          <div>Derived rate:</div>
+          <strong>
+            {estimatedCigsPerDay == null
+              ? "Enter quantity + interval to derive daily rate."
+              : <span className="value-unit">{estimatedCigsPerDay.toFixed(2)} cigarettes/day</span>}
+          </strong>
+          <div>Equivalent:</div>
+          <strong><span className="value-unit">{summary.packsPerWeek.toFixed(2)} packs/week</span></strong>
         </div>
       </div>
 
-      <div className="intake-actions">
-        <button type="button" className="chip" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="button" className="chip chip--primary" onClick={onSubmit} disabled={!canSubmit}>
-          Submit Smoking History
-        </button>
+      <div className="summary-block">
+        <h3 className="method-heading">Profile</h3>
+        <div className="summary-grid">
+          <div>DOB / Age:</div>
+          <strong>
+            <label className="summary-control" htmlFor="dobISO">
+              <input
+                id="dobISO"
+                name="dobISO"
+                type="date"
+                aria-label="Date of birth"
+                value={inputs.dobISO}
+                onChange={(event) => onChange("dobISO", event.target.value)}
+              />
+              <span className="field-hint">Age: {ageYears == null ? "--" : `${ageYears.toFixed(1)} years`}</span>
+              {errors.dobISO ? <span className="field-error" role="alert">{errors.dobISO}</span> : null}
+            </label>
+          </strong>
+
+          <div>Sex:</div>
+          <strong>
+            <label className="summary-control" htmlFor="biologicalSex">
+              <select
+                id="biologicalSex"
+                name="biologicalSex"
+                aria-label="Biological sex"
+                value={inputs.biologicalSex}
+                onChange={(event) => onChange("biologicalSex", event.target.value as BiologicalSex)}
+              >
+                {SEX_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {errors.biologicalSex ? <span className="field-error" role="alert">{errors.biologicalSex}</span> : null}
+            </label>
+          </strong>
+
+          <div>Weight:</div>
+          <strong>
+            <div className="summary-control">
+              <div className="summary-inline-control-row">
+                <label className="summary-inline-field" htmlFor="weightValue">
+                  <input
+                    id="weightValue"
+                    name="weightValue"
+                    type="number"
+                    step={0.1}
+                    aria-label="Weight"
+                    value={inputs.weightValue}
+                    onChange={(event) => onChange("weightValue", toNumberOrEmpty(event.target.value))}
+                  />
+                </label>
+                <div className="unit-toggle-row summary-inline-toggle-row">
+                  <button
+                    type="button"
+                    className={`unit-toggle ${inputs.weightUnit === "kg" ? "unit-toggle--active" : ""}`}
+                    onClick={() => handleWeightUnitChange("kg")}
+                  >
+                    kg
+                  </button>
+                  <button
+                    type="button"
+                    className={`unit-toggle ${inputs.weightUnit === "lb" ? "unit-toggle--active" : ""}`}
+                    onClick={() => handleWeightUnitChange("lb")}
+                  >
+                    lbs
+                  </button>
+                </div>
+                <span className="field-hint">Supported: {weightRangeText(inputs.weightUnit)}</span>
+              </div>
+              {errors.weightValue ? <span className="field-error" role="alert">{errors.weightValue}</span> : null}
+            </div>
+          </strong>
+
+          <div>Height:</div>
+          <strong>
+            <div className="summary-control">
+              <div className="summary-height-input-row">
+                {inputs.heightUnit === "cm" ? (
+                  <label className="summary-inline-field summary-inline-field--height-cm" htmlFor="heightValue">
+                    <input
+                      id="heightValue"
+                      name="heightValue"
+                      type="number"
+                      step={1}
+                      aria-label="Height"
+                      value={inputs.heightValue}
+                      onChange={(event) => onChange("heightValue", toNumberOrEmpty(event.target.value))}
+                    />
+                  </label>
+                ) : (
+                  <div className="summary-inline-field summary-inline-field--double summary-inline-field--double-compact">
+                    <label className="split-input split-input--inline" htmlFor="heightFeet">
+                      <input
+                        id="heightFeet"
+                        type="number"
+                        step={1}
+                        min={0}
+                        aria-label="Height feet"
+                        value={feetValue}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          onChange("heightValue", feetInchesToTotalInches(value, inchesValue));
+                        }}
+                      />
+                      <span className="split-unit">ft</span>
+                    </label>
+                    <label className="split-input split-input--inline" htmlFor="heightInches">
+                      <input
+                        id="heightInches"
+                        type="number"
+                        step={1}
+                        min={0}
+                        max={11}
+                        aria-label="Height inches"
+                        value={inchesValue}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          const nextInches = Number.isFinite(value)
+                            ? Math.min(11, Math.max(0, Math.round(value)))
+                            : 0;
+                          onChange("heightValue", feetInchesToTotalInches(feetValue, nextInches));
+                        }}
+                      />
+                      <span className="split-unit">in</span>
+                    </label>
+                  </div>
+                )}
+
+                <div className="unit-toggle-row summary-inline-toggle-row summary-inline-toggle-row--height">
+                  <button
+                    type="button"
+                    className={`unit-toggle ${inputs.heightUnit === "cm" ? "unit-toggle--active" : ""}`}
+                    onClick={() => handleHeightUnitChange("cm")}
+                  >
+                    cm
+                  </button>
+                  <button
+                    type="button"
+                    className={`unit-toggle ${inputs.heightUnit === "in" ? "unit-toggle--active" : ""}`}
+                    onClick={() => handleHeightUnitChange("in")}
+                  >
+                    feet-inches
+                  </button>
+                </div>
+              </div>
+              <span className="field-hint">Supported: {heightRangeText(inputs.heightUnit)}</span>
+              {errors.heightValue ? <span className="field-error" role="alert">{errors.heightValue}</span> : null}
+            </div>
+          </strong>
+
+          <div>Current profile:</div>
+          <strong>
+            <span className="value-unit">{formatHeightValue(summary.heightValue, summary.heightUnit)}</span>
+            {", "}
+            <span className="value-unit">{summary.weightValue} {summary.weightUnit}</span>
+            {", "}
+            <span className="value-unit">{summary.ageYears.toFixed(1)} years old</span>
+            {" "}
+            {summary.biologicalSex}
+          </strong>
+        </div>
       </div>
     </section>
   );

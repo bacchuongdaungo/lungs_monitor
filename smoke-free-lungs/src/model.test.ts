@@ -108,6 +108,30 @@ describe("model", () => {
     expect(result.errors.smokingStartDateISO).toMatch(/on or before quit date/i);
   });
 
+  it("accepts 70 kg and reports unit-aware range messages", () => {
+    const validKg = validateInputs(
+      {
+        ...baseInputs,
+        weightValue: 70,
+        weightUnit: "kg",
+      },
+      new Date(2026, 1, 26),
+    );
+
+    expect(validKg.errors.weightValue).toBeUndefined();
+
+    const invalidLb = validateInputs(
+      {
+        ...baseInputs,
+        weightValue: 70,
+        weightUnit: "lb",
+      },
+      new Date(2026, 1, 26),
+    );
+
+    expect(invalidLb.errors.weightValue).toMatch(/\blb\b/i);
+  });
+
   it("produces monotonic trends for key subscores", () => {
     const now = new Date(2026, 1, 26);
     const validated = sanitizeInputs(

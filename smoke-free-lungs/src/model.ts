@@ -127,6 +127,8 @@ export const FULL_RECOVERY_THRESHOLD = 0.995;
 
 const KG_PER_LB = 0.45359237;
 const CM_PER_IN = 2.54;
+const LB_PER_KG = 1 / KG_PER_LB;
+const IN_PER_CM = 1 / CM_PER_IN;
 
 const MS_PER_DAY = 86_400_000;
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -591,12 +593,17 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
   const weightKg = weightValue == null ? 0 : toKg(weightValue, weightUnit);
   const heightCm = heightValue == null ? 0 : toCm(heightValue, heightUnit);
 
-  if (weightValue != null && (weightKg < MIN_WEIGHT_KG || weightKg > MAX_WEIGHT_KG)) {
-    errors.weightValue = `Weight is outside supported range (${MIN_WEIGHT_KG}-${MAX_WEIGHT_KG} kg).`;
+  const minWeightForUnit = weightUnit === "kg" ? MIN_WEIGHT_KG : Math.round(MIN_WEIGHT_KG * LB_PER_KG);
+  const maxWeightForUnit = weightUnit === "kg" ? MAX_WEIGHT_KG : Math.round(MAX_WEIGHT_KG * LB_PER_KG);
+  if (weightValue != null && (weightValue < minWeightForUnit || weightValue > maxWeightForUnit)) {
+    errors.weightValue = `Weight is outside supported range (${minWeightForUnit}-${maxWeightForUnit} ${weightUnit}).`;
   }
 
-  if (heightValue != null && (heightCm < MIN_HEIGHT_CM || heightCm > MAX_HEIGHT_CM)) {
-    errors.heightValue = `Height is outside supported range (${MIN_HEIGHT_CM}-${MAX_HEIGHT_CM} cm).`;
+  const minHeightForUnit = heightUnit === "cm" ? MIN_HEIGHT_CM : Math.round(MIN_HEIGHT_CM * IN_PER_CM);
+  const maxHeightForUnit = heightUnit === "cm" ? MAX_HEIGHT_CM : Math.round(MAX_HEIGHT_CM * IN_PER_CM);
+  const heightUnitLabel = heightUnit === "cm" ? "cm" : "in";
+  if (heightValue != null && (heightValue < minHeightForUnit || heightValue > maxHeightForUnit)) {
+    errors.heightValue = `Height is outside supported range (${minHeightForUnit}-${maxHeightForUnit} ${heightUnitLabel}).`;
   }
 
   const biologicalSex = normalizeSex(inputs.biologicalSex);
