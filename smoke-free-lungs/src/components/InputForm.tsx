@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
 import {
   ageYearsFromDOBISO,
   estimateCigsPerDay,
@@ -21,8 +21,6 @@ import {
   type WeightUnit,
 } from "../model";
 import {
-  convertConsumptionQuantityForInterval,
-  convertConsumptionQuantityForUnit,
   convertHeight,
   convertNumberishInput,
   convertWeight,
@@ -119,7 +117,81 @@ function formatHeightValue(value: number, unit: HeightUnit): string {
 }
 
 function toNumberOrEmpty(value: string): number | "" {
-  return value === "" ? "" : Number(value);
+  if (value === "") return "";
+  const sanitized = value.replace(/^0+(?=\d)/, "");
+  return Number(sanitized);
+}
+
+function toIntegerOrEmpty(value: string): number | "" {
+  if (value === "") return "";
+  const sanitized = value.replace(/^0+(?=\d)/, "");
+  const num = Number(sanitized);
+  return Number.isFinite(num) ? Math.round(num) : "";
+}
+
+function normalizeNumberChange(target: HTMLInputElement): number | "" {
+  const parsed = toNumberOrEmpty(target.value);
+  if (parsed !== "") {
+    const normalized = parsed.toString();
+    if (target.value !== normalized) {
+      target.value = normalized;
+    }
+  }
+  return parsed;
+}
+
+function normalizeIntegerChange(target: HTMLInputElement): number | "" {
+  const parsed = toIntegerOrEmpty(target.value);
+  if (parsed !== "") {
+    const normalized = parsed.toString();
+    if (target.value !== normalized) {
+      target.value = normalized;
+    }
+  }
+  return parsed;
+}
+
+function sanitizeInputDisplay(target: HTMLInputElement) {
+  if (target.value !== "") {
+    const num = Number(target.value);
+    if (Number.isFinite(num)) {
+      target.value = num.toString();
+    }
+  }
+}
+
+function handleBlur(event: FocusEvent<HTMLInputElement>) {
+  sanitizeInputDisplay(event.target);
+}
+
+function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key === "Enter") {
+    sanitizeInputDisplay(event.currentTarget);
+    event.currentTarget.blur();
+  }
+}
+
+function handleIntegerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key === ".") {
+    event.preventDefault();
+  }
+  handleKeyDown(event);
+}
+
+function handleFocusSelectZero(event: FocusEvent<HTMLInputElement>) {
+  const parsed = Number(event.currentTarget.value);
+  if (event.currentTarget.value !== "" && Number.isFinite(parsed) && parsed === 0) {
+    event.currentTarget.select();
+  }
+}
+
+function dynamicInputWidth(value: number | "", minDigits = 2, maxDigits = 6): string {
+  if (value === "") {
+    return `calc(${minDigits}ch + 2.7rem)`;
+  }
+
+  const digits = Math.max(minDigits, Math.min(maxDigits, Math.abs(value).toString().length));
+  return `calc(${digits}ch + 2.7rem)`;
 }
 
 export function InputForm({ inputs, errors, summary, onChange }: Props) {
@@ -138,27 +210,13 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
   function handleConsumptionUnitChange(nextUnit: ConsumptionUnit) {
     if (nextUnit === inputs.consumptionUnit) return;
 
-    const converted = convertNumberishInput(
-      inputs.consumptionQuantity,
-      (value) => convertConsumptionQuantityForUnit(value, inputs.consumptionUnit, nextUnit),
-      2,
-    );
-
     onChange("consumptionUnit", nextUnit);
-    onChange("consumptionQuantity", converted);
   }
 
   function handleConsumptionIntervalUnitChange(nextUnit: ConsumptionIntervalUnit) {
     if (nextUnit === inputs.consumptionIntervalUnit) return;
 
-    const converted = convertNumberishInput(
-      inputs.consumptionQuantity,
-      (value) => convertConsumptionQuantityForInterval(value, inputs.consumptionIntervalUnit, nextUnit),
-      2,
-    );
-
     onChange("consumptionIntervalUnit", nextUnit);
-    onChange("consumptionQuantity", converted);
   }
 
   function handleWeightUnitChange(nextUnit: WeightUnit) {
@@ -187,9 +245,13 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
     onChange("heightValue", converted);
   }
 
-  const feetInches = inchesToFeetInches(typeof inputs.heightValue === "number" ? inputs.heightValue : 0);
-  const feetValue = feetInches.feet;
-  const inchesValue = feetInches.inches;
+  const hasHeightValue = typeof inputs.heightValue === "number";
+  const heightInchesValue = typeof inputs.heightValue === "number" ? inputs.heightValue : 0;
+  const feetInches = inchesToFeetInches(heightInchesValue);
+  const numericFeet = feetInches.feet;
+  const numericInches = feetInches.inches;
+  const feetValue: number | "" = hasHeightValue ? numericFeet : "";
+  const inchesValue: number | "" = hasHeightValue ? numericInches : "";
 
   return (
     <section>
@@ -256,7 +318,10 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                     step={0.25}
                     aria-label="Approximate smoking years"
                     value={inputs.approxSmokingYears}
-                    onChange={(event) => onChange("approxSmokingYears", toNumberOrEmpty(event.target.value))}
+                    onChange={(event) => onChange("approxSmokingYears", normalizeNumberChange(event.currentTarget))}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleFocusSelectZero}
+                    onBlur={handleBlur}
                   />
                   <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years.</span>
                   {errors.approxSmokingYears ? <span className="field-error" role="alert">{errors.approxSmokingYears}</span> : null}
@@ -299,10 +364,14 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                   id="consumptionQuantity"
                   name="consumptionQuantity"
                   type="number"
-                  step={0.1}
+                  step={1}
+                  min={0}
                   aria-label="Quantity"
                   value={inputs.consumptionQuantity}
-                  onChange={(event) => onChange("consumptionQuantity", toNumberOrEmpty(event.target.value))}
+                  onChange={(event) => onChange("consumptionQuantity", normalizeIntegerChange(event.currentTarget))}
+                  onKeyDown={handleIntegerKeyDown}
+                  onFocus={handleFocusSelectZero}
+                  onBlur={handleBlur}
                 />
                 </label>
                 <div className="toggle-row summary-inline-toggle-row">
@@ -345,9 +414,13 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                   name="consumptionIntervalCount"
                   type="number"
                   step={1}
+                  min={0}
                   aria-label="Time interval"
                   value={inputs.consumptionIntervalCount}
-                  onChange={(event) => onChange("consumptionIntervalCount", toNumberOrEmpty(event.target.value))}
+                  onChange={(event) => onChange("consumptionIntervalCount", normalizeNumberChange(event.currentTarget))}
+                  onKeyDown={handleIntegerKeyDown}
+                  onFocus={handleFocusSelectZero}
+                  onBlur={handleBlur}
                 />
                 </label>
                 <div className="toggle-row summary-inline-toggle-row">
@@ -380,12 +453,6 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
             </div>
           </strong>
 
-          <div>Pattern:</div>
-          <strong>
-            <span className="value-unit">{summary.consumptionQuantity} {summary.consumptionUnit}</span>
-            {" / "}
-            <span className="value-unit">{summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}</span>
-          </strong>
           <div>Derived rate:</div>
           <strong>
             {estimatedCigsPerDay == null
@@ -448,25 +515,22 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                     step={0.1}
                     aria-label="Weight"
                     value={inputs.weightValue}
-                    onChange={(event) => onChange("weightValue", toNumberOrEmpty(event.target.value))}
+                    onChange={(event) => onChange("weightValue", normalizeNumberChange(event.currentTarget))}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleFocusSelectZero}
+                    onBlur={handleBlur}
                   />
                 </label>
-                <div className="unit-toggle-row summary-inline-toggle-row">
-                  <button
-                    type="button"
-                    className={`unit-toggle ${inputs.weightUnit === "kg" ? "unit-toggle--active" : ""}`}
-                    onClick={() => handleWeightUnitChange("kg")}
+                <label className="summary-inline-field summary-inline-field--unit">
+                  <select
+                    aria-label="Weight unit"
+                    value={inputs.weightUnit}
+                    onChange={(event) => handleWeightUnitChange(event.target.value as WeightUnit)}
                   >
-                    kg
-                  </button>
-                  <button
-                    type="button"
-                    className={`unit-toggle ${inputs.weightUnit === "lb" ? "unit-toggle--active" : ""}`}
-                    onClick={() => handleWeightUnitChange("lb")}
-                  >
-                    lbs
-                  </button>
-                </div>
+                    <option value="kg">kg</option>
+                    <option value="lb">lbs</option>
+                  </select>
+                </label>
                 <span className="field-hint">Supported: {weightRangeText(inputs.weightUnit)}</span>
               </div>
               {errors.weightValue ? <span className="field-error" role="alert">{errors.weightValue}</span> : null}
@@ -484,9 +548,14 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                       name="heightValue"
                       type="number"
                       step={1}
+                      min={0}
                       aria-label="Height"
                       value={inputs.heightValue}
-                      onChange={(event) => onChange("heightValue", toNumberOrEmpty(event.target.value))}
+                      style={{ width: dynamicInputWidth(inputs.heightValue, 3, 6) }}
+                      onChange={(event) => onChange("heightValue", normalizeIntegerChange(event.currentTarget))}
+                      onKeyDown={handleIntegerKeyDown}
+                      onFocus={handleFocusSelectZero}
+                      onBlur={handleBlur}
                     />
                   </label>
                 ) : (
@@ -499,10 +568,22 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                         min={0}
                         aria-label="Height feet"
                         value={feetValue}
+                        style={{ width: dynamicInputWidth(feetValue, 2, 6) }}
                         onChange={(event) => {
-                          const value = Number(event.target.value);
-                          onChange("heightValue", feetInchesToTotalInches(value, inchesValue));
+                          const value = normalizeIntegerChange(event.currentTarget);
+                          if (value === "") {
+                            if (numericInches === 0) {
+                              onChange("heightValue", "");
+                            } else {
+                              onChange("heightValue", numericInches);
+                            }
+                            return;
+                          }
+                          onChange("heightValue", feetInchesToTotalInches(value, numericInches));
                         }}
+                        onKeyDown={handleIntegerKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
                       />
                       <span className="split-unit">ft</span>
                     </label>
@@ -515,35 +596,41 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                         max={11}
                         aria-label="Height inches"
                         value={inchesValue}
+                        style={{ width: dynamicInputWidth(inchesValue, 2, 4) }}
                         onChange={(event) => {
-                          const value = Number(event.target.value);
-                          const nextInches = Number.isFinite(value)
-                            ? Math.min(11, Math.max(0, Math.round(value)))
+                          const value = normalizeIntegerChange(event.currentTarget);
+                          if (value === "") {
+                            if (numericFeet === 0) {
+                              onChange("heightValue", "");
+                            } else {
+                              onChange("heightValue", feetInchesToTotalInches(numericFeet, 0));
+                            }
+                            return;
+                          }
+                          const nextInches = typeof value === "number"
+                            ? Math.min(11, Math.max(0, value))
                             : 0;
-                          onChange("heightValue", feetInchesToTotalInches(feetValue, nextInches));
+                          onChange("heightValue", feetInchesToTotalInches(numericFeet, nextInches));
                         }}
+                        onKeyDown={handleIntegerKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
                       />
                       <span className="split-unit">in</span>
                     </label>
                   </div>
                 )}
 
-                <div className="unit-toggle-row summary-inline-toggle-row summary-inline-toggle-row--height">
-                  <button
-                    type="button"
-                    className={`unit-toggle ${inputs.heightUnit === "cm" ? "unit-toggle--active" : ""}`}
-                    onClick={() => handleHeightUnitChange("cm")}
+                <label className="summary-inline-field summary-inline-field--unit">
+                  <select
+                    aria-label="Height unit"
+                    value={inputs.heightUnit}
+                    onChange={(event) => handleHeightUnitChange(event.target.value as HeightUnit)}
                   >
-                    cm
-                  </button>
-                  <button
-                    type="button"
-                    className={`unit-toggle ${inputs.heightUnit === "in" ? "unit-toggle--active" : ""}`}
-                    onClick={() => handleHeightUnitChange("in")}
-                  >
-                    feet-inches
-                  </button>
-                </div>
+                    <option value="cm">cm</option>
+                    <option value="in">ft/in</option>
+                  </select>
+                </label>
               </div>
               <span className="field-hint">Supported: {heightRangeText(inputs.heightUnit)}</span>
               {errors.heightValue ? <span className="field-error" role="alert">{errors.heightValue}</span> : null}

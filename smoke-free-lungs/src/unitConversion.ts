@@ -1,5 +1,4 @@
 import type {
-  ConsumptionIntervalUnit,
   ConsumptionUnit,
   HeightUnit,
   WeightUnit,
@@ -40,15 +39,6 @@ export function convertConsumptionQuantityForUnit(
 ): number {
   if (from === to) return quantity;
   return from === "cigarettes" ? quantity / CIGS_PER_PACK : quantity * CIGS_PER_PACK;
-}
-
-export function convertConsumptionQuantityForInterval(
-  quantity: number,
-  from: ConsumptionIntervalUnit,
-  to: ConsumptionIntervalUnit,
-): number {
-  if (from === to) return quantity;
-  return from === "days" ? quantity * 7 : quantity / 7;
 }
 
 export function inchesToFeetInches(totalInches: number): { feet: number; inches: number } {

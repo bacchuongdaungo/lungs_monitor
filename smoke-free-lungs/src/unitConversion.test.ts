@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { estimateCigsPerDay } from "./model";
 import {
-  convertConsumptionQuantityForInterval,
   convertConsumptionQuantityForUnit,
   convertHeight,
   convertWeight,
@@ -30,14 +29,6 @@ describe("unitConversion", () => {
     const quantityInPacks = convertConsumptionQuantityForUnit(12, "cigarettes", "packs");
     const originalRate = estimateCigsPerDay("cigarettes", 12, "days", 1);
     const convertedRate = estimateCigsPerDay("packs", quantityInPacks, "days", 1);
-
-    expect(convertedRate).toBeCloseTo(originalRate as number, 6);
-  });
-
-  it("preserves cigs/day when switching days to weeks", () => {
-    const weeklyQuantity = convertConsumptionQuantityForInterval(10, "days", "weeks");
-    const originalRate = estimateCigsPerDay("cigarettes", 10, "days", 1);
-    const convertedRate = estimateCigsPerDay("cigarettes", weeklyQuantity, "weeks", 1);
 
     expect(convertedRate).toBeCloseTo(originalRate as number, 6);
   });

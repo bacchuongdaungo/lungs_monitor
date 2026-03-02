@@ -61,7 +61,6 @@ export function LungCoach({ selectedPartId, state }: Props) {
           type="text"
           aria-label="Ask lungs a question"
           value={question}
-          placeholder="e.g., Why does this part hurt?"
           onChange={(event) => setQuestion(event.target.value)}
         />
         <button
