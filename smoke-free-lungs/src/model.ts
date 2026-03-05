@@ -528,7 +528,11 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
   let approxSmokingYears: number | null = null;
 
   if (lengthMode === "exact_dates") {
-    const smokingStartDate = parseISODateLocal(inputs.smokingStartDateISO);
+    let startInput = inputs.smokingStartDateISO;
+    if (/^\d{4}-\d{2}$/.test(startInput)) {
+      startInput += "-01";
+    }
+    const smokingStartDate = parseISODateLocal(startInput);
     if (!smokingStartDate) {
       errors.smokingStartDateISO = "Enter a valid smoking start date.";
     } else if (quitDate && smokingStartDate > quitDate) {
@@ -570,7 +574,7 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
   if (estimatedCigsPerDay == null) {
     errors.consumptionQuantity = errors.consumptionQuantity ?? "Enter a valid smoking pattern.";
   } else if (estimatedCigsPerDay > MAX_CIGS_PER_DAY) {
-    errors.consumptionQuantity = `This pattern equals ${estimatedCigsPerDay.toFixed(1)} cigarettes/day; max supported is ${MAX_CIGS_PER_DAY}.`;
+    errors.consumptionQuantity = `This means you smoke ${estimatedCigsPerDay.toFixed(1)} cigarettes in a day! How are you still alive???`;
   }
 
   const dob = parseISODateLocal(inputs.dobISO);
@@ -695,7 +699,11 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
   let approxSmokingYears: number | null = null;
 
   if (lengthMode === "exact_dates") {
-    const startCandidate = parseISODateLocal(inputs.smokingStartDateISO);
+    let startInput = inputs.smokingStartDateISO;
+    if (/^\d{4}-\d{2}$/.test(startInput)) {
+      startInput += "-01";
+    }
+    const startCandidate = parseISODateLocal(startInput);
     const safeStart = startCandidate && startCandidate <= safeQuitDate ? startCandidate : safeQuitDate;
     smokingStartDateISO = formatISODateLocal(safeStart);
     smokingYears = smokingYearsByDates(smokingStartDateISO, quitDateISO);

@@ -1,11 +1,11 @@
 import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
 import {
-  ageYearsFromDOBISO,
+  // ageYearsFromDOBISO,
   estimateCigsPerDay,
   MAX_CONSUMPTION_INTERVAL_COUNT,
   MAX_CONSUMPTION_QUANTITY,
   MAX_HEIGHT_CM,
-  MAX_SMOKING_YEARS,
+  // MAX_SMOKING_YEARS,
   MAX_WEIGHT_KG,
   MIN_CONSUMPTION_INTERVAL_COUNT,
   MIN_HEIGHT_CM,
@@ -73,29 +73,6 @@ function ToggleButton({
 function yearsText(startISO: string, quitISO: string): string {
   const years = smokingYearsByDates(startISO, quitISO);
   return `${years.toFixed(1)} years`;
-}
-
-function formatDurationFromYears(years: number): string {
-  const totalDays = Math.max(0, Math.round(years * 365.25));
-  if (totalDays < 30) {
-    return `${totalDays} day${totalDays === 1 ? "" : "s"}`;
-  }
-
-  if (totalDays < 365) {
-    const months = Math.max(1, Math.round(totalDays / 30.44));
-    return `${months} month${months === 1 ? "" : "s"}`;
-  }
-
-  const wholeYears = Math.floor(totalDays / 365.25);
-  const wholeYearDays = Math.round(wholeYears * 365.25);
-  const remainingDays = Math.max(0, totalDays - wholeYearDays);
-  const remainingMonths = Math.round(remainingDays / 30.44);
-
-  if (remainingMonths <= 0) {
-    return `${wholeYears} year${wholeYears === 1 ? "" : "s"}`;
-  }
-
-  return `${wholeYears} year${wholeYears === 1 ? "" : "s"} ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
 }
 
 function weightRangeText(unit: WeightUnit): string {
@@ -205,7 +182,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
     intervalCount,
   );
 
-  const ageYears = ageYearsFromDOBISO(inputs.dobISO);
+  // const ageYears = ageYearsFromDOBISO(inputs.dobISO);
 
   function handleConsumptionUnitChange(nextUnit: ConsumptionUnit) {
     if (nextUnit === inputs.consumptionUnit) return;
@@ -261,7 +238,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
       <div className="summary-block">
         <h3 className="method-heading">Smoking length</h3>
         <div className="summary-grid">
-          <div>Mode:</div>
+          {/* <div>Mode:</div>
           <strong>
             <div className="toggle-row">
               <ToggleButton
@@ -287,7 +264,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                 onClick={() => onChange("smokingLengthMode", "approx_years")}
               />
             </div>
-          </strong>
+          </strong> */}
 
           {inputs.smokingLengthMode === "exact_dates" ? (
             <>
@@ -297,7 +274,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                   <input
                     id="smokingStartDateISO"
                     name="smokingStartDateISO"
-                    type="date"
+                    type="month"
                     aria-label="Start date"
                     value={inputs.smokingStartDateISO}
                     onChange={(event) => onChange("smokingStartDateISO", event.target.value)}
@@ -308,7 +285,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
             </>
           ) : (
             <>
-              <div>Approximate years:</div>
+              {/* <div>Approx. years:</div>
               <strong>
                 <label className="summary-control" htmlFor="approxSmokingYears">
                   <input
@@ -326,7 +303,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                   <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years.</span>
                   {errors.approxSmokingYears ? <span className="field-error" role="alert">{errors.approxSmokingYears}</span> : null}
                 </label>
-              </strong>
+              </strong> */}
             </>
           )}
 
@@ -344,9 +321,6 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
               {errors.quitDateISO ? <span className="field-error" role="alert">{errors.quitDateISO}</span> : null}
             </label>
           </strong>
-
-          <div>Total duration:</div>
-          <strong>{formatDurationFromYears(summary.smokingYears)}</strong>
         </div>
 
         <p className="summary-sentence">Smoking length estimate: {yearsText(summary.smokingStartDateISO, summary.quitDateISO)}</p>
@@ -467,7 +441,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
       <div className="summary-block">
         <h3 className="method-heading">Profile</h3>
         <div className="summary-grid">
-          <div>DOB / Age:</div>
+          <div>DOB:</div>
           <strong>
             <label className="summary-control" htmlFor="dobISO">
               <input
@@ -478,7 +452,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
                 value={inputs.dobISO}
                 onChange={(event) => onChange("dobISO", event.target.value)}
               />
-              <span className="field-hint">Age: {ageYears == null ? "--" : `${ageYears.toFixed(1)} years`}</span>
+              {/* <span className="field-hint">Age: {ageYears == null ? "--" : `${ageYears.toFixed(1)} years`}</span> */}
               {errors.dobISO ? <span className="field-error" role="alert">{errors.dobISO}</span> : null}
             </label>
           </strong>
@@ -637,7 +611,7 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
             </div>
           </strong>
 
-          <div>Current profile:</div>
+          {/* <div>Current profile:</div>
           <strong>
             <span className="value-unit">{formatHeightValue(summary.heightValue, summary.heightUnit)}</span>
             {", "}
@@ -646,8 +620,22 @@ export function InputForm({ inputs, errors, summary, onChange }: Props) {
             <span className="value-unit">{summary.ageYears.toFixed(1)} years old</span>
             {" "}
             {summary.biologicalSex}
-          </strong>
+          </strong> */}
         </div>
+      </div>
+      <div className="summary-block">
+        <h3 className="method-heading">Summary</h3>
+        <div className="summary-grid"></div>
+        <div>Current profile:</div>
+          <strong>
+            <span className="value-unit">{formatHeightValue(summary.heightValue, summary.heightUnit)}</span>
+            {", "}
+            <span className="value-unit">{summary.weightValue} {summary.weightUnit}</span>
+            {", "}
+            <span className="value-unit">{summary.ageYears.toFixed(1)} years old</span>
+            {" "}
+            {summary.biologicalSex} smoked for {yearsText(summary.smokingStartDateISO, summary.quitDateISO)} at a rate of {estimatedCigsPerDay == null ? "--" : `${estimatedCigsPerDay.toFixed(2)} cigarettes/day`}.
+          </strong>
       </div>
     </section>
   );
