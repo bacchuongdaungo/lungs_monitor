@@ -134,6 +134,11 @@ function normalizeInputs(value: unknown): Inputs | null {
     weightUnit,
     heightValue: heightValue === "" ? 170 : heightValue,
     heightUnit,
+    vapeBrandName: typeof record.vapeBrandName === "string" ? record.vapeBrandName : "",
+    recoveryGoal:
+      typeof record.recoveryGoal === "string" && record.recoveryGoal.trim().length > 0
+        ? record.recoveryGoal
+        : "Reach one full smoke-free year",
   };
 }
 

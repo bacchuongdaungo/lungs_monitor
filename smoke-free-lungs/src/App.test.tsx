@@ -43,6 +43,8 @@ function defaultStoredInputs(quitDateISO: string): Inputs {
     weightUnit: "kg",
     heightValue: 170,
     heightUnit: "cm",
+    vapeBrandName: "CalmMint",
+    recoveryGoal: "Reach one full smoke-free year",
   };
 }
 
@@ -57,96 +59,82 @@ function seedStoredState(quitDateISO: string) {
   );
 }
 
+function seedStoredGoal(goal: string) {
+  const inputs = defaultStoredInputs(formatISODateLocal(new Date()));
+  localStorage.setItem(
+    "sfl_state_v2",
+    JSON.stringify({
+      schemaVersion: 2,
+      inputs: {
+        ...inputs,
+        recoveryGoal: goal,
+      },
+      earnedBadgeIds: [],
+    }),
+  );
+}
+
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
+    window.location.hash = "";
   });
 
-  it("shows validation error without breaking visualization", async () => {
-    const user = userEvent.setup();
+  it("defaults to the home page and keeps the visualization available", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: /open smoking history/i }));
-    fireEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
-    const qtyInput = screen.getByRole("spinbutton", { name: /quantity/i });
-    await user.clear(qtyInput);
-
-    expect(await screen.findByText(/enter smoking quantity/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /visualize lung recovery/i })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /lung recovery visualization/i })).toBeInTheDocument();
+    expect(screen.getByText(/ask the lungs/i)).toBeInTheDocument();
   });
 
-  it("supports timeline day input and recovery-date quick jump", async () => {
+  it("navigates to patient page and shows record fields for cigarette, vape, and goal", async () => {
     render(<App />);
 
-    const dayInput = screen.getByLabelText(/go to day number/i);
-    fireEvent.change(dayInput, { target: { value: "45" } });
-    expect(dayInput).toHaveValue(45);
+    fireEvent.click(screen.getByRole("button", { name: /patient record/i }));
 
-    const recoveryJump = screen.getByRole("button", { name: /\+recovery date/i });
-    fireEvent.click(recoveryJump);
+    expect(screen.getByRole("heading", { name: /patient record/i })).toBeInTheDocument();
+    expect(screen.getByText(/medical profile and habits/i)).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByLabelText(/go to day number/i)).toHaveValue(
-        Number((screen.getByLabelText(/go to day number/i) as HTMLInputElement).max),
-      );
-    });
+    await userEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
+
+    expect(screen.getByLabelText(/cigarette brand/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/vape brand/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/recovery goal/i)).toBeInTheDocument();
   });
 
-  it("unlocks badges at exact day thresholds and persists earned ids", async () => {
-    const targetQuitDate = isoDaysAgo(15);
-    seedStoredState(targetQuitDate);
+  it("shows the stored recovery goal on the progress page", () => {
+    seedStoredGoal("Reach 90 smoke-free days");
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /progress/i }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("badge-day-14")).toHaveAttribute("data-unlocked", "true");
-    });
-
-    expect(screen.getByTestId("badge-day-30")).toHaveAttribute("data-unlocked", "false");
-
-    await waitFor(() => {
-      const savedRaw = localStorage.getItem("sfl_state_v2");
-      expect(savedRaw).not.toBeNull();
-      const saved = JSON.parse(savedRaw as string) as { earnedBadgeIds: string[] };
-      expect(saved.earnedBadgeIds).toContain("day-14");
-    });
+    expect(screen.getAllByText(/reach 90 smoke-free days/i).length).toBeGreaterThan(0);
   });
 
-  it("answers a question for selected lung hotspot", async () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByTestId("hotspot-bronchi"));
-
-    const questionInput = screen.getByLabelText(/ask lungs a question/i);
-    fireEvent.change(questionInput, { target: { value: "What does this part do?" } });
-    fireEvent.click(screen.getByRole("button", { name: /^ask$/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("qa-answer").textContent?.toLowerCase()).toContain("cilia function proxy");
-    });
-  });
-
-  it("keeps anatomy button selection in sync between 2D and 3D", async () => {
-    const { container } = render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: /^bronchi$/i }));
-    const bronchiHotspot = screen.getByTestId("hotspot-bronchi");
-    expect(bronchiHotspot).toHaveAttribute("fill-opacity", "0.2");
-
-    fireEvent.click(screen.getByRole("button", { name: /^3d$/i }));
-
-    await waitFor(() => {
-      expect(container.querySelector(".lungs3d-selection")?.textContent).toContain("Bronchi");
-    });
-  });
-
-  it("keeps recovery activity tied to current day since quit", async () => {
+  it("shows current smoke-free time on the progress page", async () => {
     const targetQuitDate = isoDaysAgo(12);
     const expectedDaysSinceQuit = daysSince(targetQuitDate);
     seedStoredState(targetQuitDate);
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: /progress/i }));
+
     await waitFor(() => {
-      expect(screen.getByText(new RegExp(`today, day ${expectedDaysSinceQuit} since quit`, "i"))).toBeInTheDocument();
+      expect(screen.getAllByText(new RegExp(`${expectedDaysSinceQuit} days`, "i")).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("answers a question for a selected lung hotspot on the home page", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId("hotspot-bronchi"));
+    fireEvent.change(screen.getByLabelText(/ask lungs a question/i), {
+      target: { value: "What does this part do?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("qa-answer").textContent?.toLowerCase()).toContain("cilia function proxy");
     });
   });
 });

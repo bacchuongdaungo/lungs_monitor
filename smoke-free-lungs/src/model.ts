@@ -24,6 +24,8 @@ export type Inputs = {
   weightUnit: WeightUnit;
   heightValue: number | "";
   heightUnit: HeightUnit;
+  vapeBrandName: string;
+  recoveryGoal: string;
 };
 
 export type MetabolismCategory = "slower" | "average" | "faster";
@@ -63,6 +65,8 @@ export type ValidatedInputs = {
   effectivePackYears: number;
   dailyNicotineMg: number;
   dailyTarMg: number;
+  vapeBrandName: string;
+  recoveryGoal: string;
 };
 
 export type LungSubscores = {
@@ -124,6 +128,7 @@ export const MAX_CONSUMPTION_QUANTITY = 2000;
 export const MAX_CONSUMPTION_INTERVAL_COUNT = 365;
 export const MIN_CONSUMPTION_INTERVAL_COUNT = 1;
 export const FULL_RECOVERY_THRESHOLD = 0.995;
+const DEFAULT_RECOVERY_GOAL = "Reach one full smoke-free year";
 
 const KG_PER_LB = 0.45359237;
 const CM_PER_IN = 2.54;
@@ -240,6 +245,11 @@ function readNumberish(value: number | ""): number | null {
   if (value === "") return null;
   if (!Number.isFinite(value)) return null;
   return value;
+}
+
+function normalizeOptionalText(value: unknown, maxLength = 80): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
 }
 
 function validateRange(label: string, value: number | "", min: number, max: number): string | null {
@@ -624,6 +634,11 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
     errors.cigaretteBrandId = "Pick a cigarette brand.";
   }
 
+  const recoveryGoal = normalizeOptionalText(inputs.recoveryGoal, 120);
+  if (!recoveryGoal) {
+    errors.recoveryGoal = "Enter a recovery goal.";
+  }
+
   if (Object.keys(errors).length > 0 || !quitDate || !brand || estimatedCigsPerDay == null || ageYears == null) {
     return { value: null, errors };
   }
@@ -685,6 +700,8 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
       effectivePackYears: pack * chemistryMultiplier,
       dailyNicotineMg: brand.nicotineMg * cigsPerDay,
       dailyTarMg: brand.tarMg * cigsPerDay,
+      vapeBrandName: normalizeOptionalText(inputs.vapeBrandName, 80),
+      recoveryGoal,
     },
     errors,
   };
@@ -753,6 +770,11 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
   const heightCm = clamp(toCm(heightValue, heightUnit), MIN_HEIGHT_CM, MAX_HEIGHT_CM);
 
   const brand = getBrandById(inputs.cigaretteBrandId) ?? getBrandById(DEFAULT_BRAND_ID);
+  if (!brand) {
+    throw new Error("Default cigarette brand is missing.");
+  }
+  const vapeBrandName = normalizeOptionalText(inputs.vapeBrandName, 80);
+  const recoveryGoal = normalizeOptionalText(inputs.recoveryGoal, 120) || DEFAULT_RECOVERY_GOAL;
 
   const bmrKcalPerDay = mifflinStJeorBmr(weightKg, heightCm, ageYears, biologicalSex);
   const bmi = computeBmi(weightKg, heightCm);
@@ -803,6 +825,8 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
     effectivePackYears: pack * chemistryMultiplier,
     dailyNicotineMg: brand.nicotineMg * cigsPerDay,
     dailyTarMg: brand.tarMg * cigsPerDay,
+    vapeBrandName,
+    recoveryGoal,
   };
 }
 

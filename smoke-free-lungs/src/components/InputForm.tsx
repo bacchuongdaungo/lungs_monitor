@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { CIGARETTE_BRANDS } from "../cigBrands";
 import {
   estimateCigsPerDay,
   MAX_CONSUMPTION_INTERVAL_COUNT,
@@ -55,6 +56,8 @@ const INPUT_KEYS: ReadonlyArray<keyof Inputs> = [
   "weightUnit",
   "heightValue",
   "heightUnit",
+  "vapeBrandName",
+  "recoveryGoal",
 ];
 
 function ToggleIcon({ children }: { children: ReactNode }) {
@@ -354,6 +357,9 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
         </p>
         <p className="summary-sentence">
           Current profile: {formatHeightValue(summary.heightValue, summary.heightUnit)}, {summary.weightValue} {summary.weightUnit}, {summary.ageYears.toFixed(1)} years old {summary.biologicalSex}.
+        </p>
+        <p className="summary-sentence">
+          Cigarette brand: {summary.cigaretteBrandName}. {summary.vapeBrandName ? `Vape brand: ${summary.vapeBrandName}. ` : ""}Goal: {summary.recoveryGoal}.
         </p>
       </div>
 
@@ -740,6 +746,65 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
                   <span className="field-hint">Supported: {heightRangeText(draft.heightUnit)}</span>
                   {draftErrors.heightValue ? <span className="field-error" role="alert">{draftErrors.heightValue}</span> : null}
                 </div>
+              </strong>
+            </div>
+          </div>
+
+          <div className="summary-block">
+            <h3 className="method-heading">Brands and goals</h3>
+            <div className="summary-grid">
+              <div>Cigarette brand:</div>
+              <strong>
+                <label className="summary-control" htmlFor="cigaretteBrandId">
+                  <select
+                    id="cigaretteBrandId"
+                    name="cigaretteBrandId"
+                    aria-label="Cigarette brand"
+                    value={draft.cigaretteBrandId}
+                    onChange={(event) => updateDraft("cigaretteBrandId", event.target.value)}
+                  >
+                    {CIGARETTE_BRANDS.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                  {draftErrors.cigaretteBrandId ? <span className="field-error" role="alert">{draftErrors.cigaretteBrandId}</span> : null}
+                </label>
+              </strong>
+
+              <div>Vape brand:</div>
+              <strong>
+                <label className="summary-control" htmlFor="vapeBrandName">
+                  <input
+                    id="vapeBrandName"
+                    name="vapeBrandName"
+                    type="text"
+                    maxLength={80}
+                    aria-label="Vape brand"
+                    placeholder="Optional vape brand"
+                    value={draft.vapeBrandName}
+                    onChange={(event) => updateDraft("vapeBrandName", event.target.value)}
+                  />
+                  <span className="field-hint">Optional. Stored in the patient record only.</span>
+                </label>
+              </strong>
+
+              <div>Recovery goal:</div>
+              <strong>
+                <label className="summary-control" htmlFor="recoveryGoal">
+                  <input
+                    id="recoveryGoal"
+                    name="recoveryGoal"
+                    type="text"
+                    maxLength={120}
+                    aria-label="Recovery goal"
+                    value={draft.recoveryGoal}
+                    onChange={(event) => updateDraft("recoveryGoal", event.target.value)}
+                  />
+                  <span className="field-hint">Example: Reach one full smoke-free year.</span>
+                  {draftErrors.recoveryGoal ? <span className="field-error" role="alert">{draftErrors.recoveryGoal}</span> : null}
+                </label>
               </strong>
             </div>
           </div>

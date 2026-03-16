@@ -28,6 +28,8 @@ const baseInputs: Inputs = {
   weightUnit: "kg",
   heightValue: 170,
   heightUnit: "cm",
+  vapeBrandName: "",
+  recoveryGoal: "Reach one full smoke-free year",
 };
 
 describe("model", () => {
@@ -64,6 +66,8 @@ describe("model", () => {
         weightUnit: "kg",
         heightValue: 300,
         heightUnit: "cm",
+        vapeBrandName: "AeroMint",
+        recoveryGoal: "",
       },
       new Date(2026, 1, 26),
     );
@@ -75,6 +79,8 @@ describe("model", () => {
     expect(sanitized.heightCm).toBe(240);
     expect(sanitized.cigaretteBrandId).toBe("average-us-king");
     expect(sanitized.dobISO).toBe(inferDOBFromAgeYears(30, new Date(2026, 1, 26)));
+    expect(sanitized.vapeBrandName).toBe("AeroMint");
+    expect(sanitized.recoveryGoal).toBe("Reach one full smoke-free year");
   });
 
   it("uses local calendar days and clamps future quit date", () => {

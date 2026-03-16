@@ -49,6 +49,6 @@ export const CIGARETTE_BRANDS: CigaretteBrand[] = [
   { id: "montego-blue", name: "Montego Blue", nicotineMg: 0.7, tarMg: 8, category: "light", sourceNote: "Public machine-yield range" },
 ];
 
-export function getBrandById(id: string): CigaretteBrand {
-  return CIGARETTE_BRANDS.find((brand) => brand.id === id) ?? CIGARETTE_BRANDS[0];
+export function getBrandById(id: string): CigaretteBrand | null {
+  return CIGARETTE_BRANDS.find((brand) => brand.id === id) ?? null;
 }

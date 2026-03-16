@@ -32,6 +32,8 @@ describe("storage", () => {
         weightUnit: "kg",
         heightValue: 170,
         heightUnit: "cm",
+        vapeBrandName: "",
+        recoveryGoal: "Reach one full smoke-free year",
       },
       earnedBadgeIds: [],
     });
@@ -56,6 +58,8 @@ describe("storage", () => {
         weightUnit: "kg",
         heightValue: 180,
         heightUnit: "cm",
+        vapeBrandName: "BlueMist",
+        recoveryGoal: "Reach 180 smoke-free days",
       },
       earnedBadgeIds: ["day-1", "day-3"],
     });
@@ -66,5 +70,7 @@ describe("storage", () => {
     expect(loaded?.inputs.biologicalSex).toBe("male");
     expect(loaded?.inputs.cigaretteBrandId).toBe("marlboro-red");
     expect(loaded?.inputs.consumptionUnit).toBe("packs");
+    expect(loaded?.inputs.vapeBrandName).toBe("BlueMist");
+    expect(loaded?.inputs.recoveryGoal).toBe("Reach 180 smoke-free days");
   });
 });

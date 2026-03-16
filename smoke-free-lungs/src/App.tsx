@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { DEFAULT_BRAND_ID } from "./cigBrands";
-import { LungViz } from "./LungViz";
-import { BadgeStrip } from "./components/BadgeStrip";
-import { BreathingDemo } from "./components/BreathingDemo";
-import { InputForm } from "./components/InputForm";
-import { LungCoach } from "./components/LungCoach";
-import { MethodPanel } from "./components/MethodPanel";
-import { RecoveryActivity } from "./components/RecoveryActivity";
-import { StatsCards } from "./components/StatsCards";
-import { TimelineScrubber } from "./components/TimelineScrubber";
-import { LungsScene } from "./features/lungs";
-import { getEarnedBadgeIds, mergeEarnedBadgeIds, MILESTONE_BADGES } from "./milestones";
+import { AppNav, type AppPageId } from "./components/AppNav";
+import { getEarnedBadgeIds, mergeEarnedBadgeIds } from "./milestones";
 import type { LungPartId } from "./lungKnowledge";
 import {
   computeRecoveryState,
@@ -24,19 +15,16 @@ import {
   sanitizeInputs,
   todayISO,
 } from "./model";
+import { HomePage } from "./pages/HomePage";
+import { PatientPage } from "./pages/PatientPage";
+import { ProgressPage } from "./pages/ProgressPage";
 import { loadStoredState, saveStoredState } from "./storage";
 
-const clampPreview = (value: number, maxDays: number) => Math.max(0, Math.min(maxDays, Math.round(value)));
+const DEFAULT_RECOVERY_GOAL = "Reach one full smoke-free year";
 
-const VIZ_PART_BUTTONS: readonly { id: LungPartId; label: string }[] = [
-  { id: "trachea", label: "Trachea" },
-  { id: "bronchi", label: "Bronchi" },
-  { id: "left-upper-lobe", label: "Left Upper" },
-  { id: "left-lower-lobe", label: "Left Lower" },
-  { id: "right-upper-lobe", label: "Right Upper" },
-  { id: "right-middle-lobe", label: "Right Middle" },
-  { id: "right-lower-lobe", label: "Right Lower" },
-] as const;
+function clampPreview(value: number, maxDays: number): number {
+  return Math.max(0, Math.min(maxDays, Math.round(value)));
+}
 
 function defaultSmokingStartISO(now = new Date()): string {
   const start = new Date(now);
@@ -61,6 +49,42 @@ function defaultInputs(now = new Date()): Inputs {
     weightUnit: "kg",
     heightValue: 170,
     heightUnit: "cm",
+    vapeBrandName: "",
+    recoveryGoal: DEFAULT_RECOVERY_GOAL,
+  };
+}
+
+function normalizePage(value: string | null): AppPageId {
+  if (value === "patient" || value === "progress") return value;
+  return "home";
+}
+
+function pageFromHash(hash: string): AppPageId {
+  const raw = hash.replace(/^#\/?/, "");
+  return normalizePage(raw || "home");
+}
+
+function pageCopy(page: AppPageId, goal: string) {
+  if (page === "patient") {
+    return {
+      eyebrow: "Patient Profile",
+      title: "Keep the medical record clean, editable, and separate from the visual dashboard",
+      body: "Use this page to maintain the smoking history, quit date, body profile, cigarette brand, vape brand, and recovery goal.",
+    };
+  }
+
+  if (page === "progress") {
+    return {
+      eyebrow: "Progress Tracking",
+      title: "Follow day-by-day recovery without burying it under the anatomy views",
+      body: `Track the smoke-free streak, projected recovery curve, milestone badges, and goal progress. Current goal: ${goal}.`,
+    };
+  }
+
+  return {
+    eyebrow: "Smoke-Free Lungs",
+    title: "Visualize lung recovery and ask targeted questions about symptoms, function, and healing",
+    body: "The home page keeps the lung artwork and medical assistant together, while the rest of the record and progress tracking live on separate pages.",
   };
 }
 
@@ -68,9 +92,11 @@ export default function App() {
   const [initialState] = useState(() => loadStoredState());
   const [initialInputs] = useState<Inputs>(() => initialState?.inputs ?? defaultInputs());
   const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
-  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
+  const [currentPage, setCurrentPage] = useState<AppPageId>(() =>
+    typeof window === "undefined" ? "home" : pageFromHash(window.location.hash),
+  );
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>(() => {
     const sourceInputs = initialState?.inputs ?? defaultInputs();
     const persisted = initialState?.earnedBadgeIds ?? [];
@@ -84,10 +110,8 @@ export default function App() {
 
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
-
   const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
   const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
-
   const effectivePreviewDays = useMemo(
     () => clampPreview(previewDays, fullRecoveryDay),
     [previewDays, fullRecoveryDay],
@@ -98,6 +122,9 @@ export default function App() {
     [safeInputs, effectivePreviewDays, now, fullRecoveryDay],
   );
 
+  const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}|${safeInputs.vapeBrandName}`;
+  const hero = pageCopy(currentPage, safeInputs.recoveryGoal);
+
   useEffect(() => {
     saveStoredState({
       schemaVersion: 2,
@@ -106,7 +133,23 @@ export default function App() {
     });
   }, [inputs, earnedBadgeIds]);
 
-  const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}`;
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const onHashChange = () => {
+      setCurrentPage(pageFromHash(window.location.hash));
+    };
+
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  function navigate(nextPage: AppPageId) {
+    if (typeof window !== "undefined") {
+      window.location.hash = nextPage;
+    }
+    setCurrentPage(nextPage);
+  }
 
   function handleInputSubmit(nextInputs: Inputs) {
     setInputs(nextInputs);
@@ -120,136 +163,51 @@ export default function App() {
   return (
     <main className="page-shell">
       <header className="hero">
-        <p className="eyebrow">Smoke-Free Lungs</p>
-        <h1>Cartoon lungs that clear as smoke-free days stack up</h1>
-        <p>
-          Enter your smoking pattern and body metrics. The model estimates recovery
-          trends and keeps art deterministic for your profile.
-        </p>
+        <div className="hero__topline">
+          <div>
+            <p className="eyebrow">{hero.eyebrow}</p>
+            <h1>{hero.title}</h1>
+            <p>{hero.body}</p>
+          </div>
+
+          <aside className="hero-metrics">
+            <span className="hero-metric">
+              <strong>{state.daysSinceQuit}</strong>
+              <span>days smoke-free</span>
+            </span>
+            <span className="hero-metric">
+              <strong>{Math.round(state.recoveryPercent * 100)}%</strong>
+              <span>toward target</span>
+            </span>
+          </aside>
+        </div>
+
+        <AppNav currentPage={currentPage} onNavigate={navigate} />
       </header>
 
-      <section className={`layout-shell ${isIntakeOpen ? "layout-shell--intake-open" : ""}`}>
-        <aside className={`intake-rail ${isIntakeOpen ? "intake-rail--open" : ""}`}>
-          <button
-            type="button"
-            className="intake-rail-toggle"
-            aria-expanded={isIntakeOpen}
-            aria-controls="smoking-history-panel"
-            onClick={() => setIsIntakeOpen((current) => !current)}
-          >
-            {isIntakeOpen ? "Hide Smoking History" : "Open Smoking History"}
-          </button>
-          <div
-            id="smoking-history-panel"
-            className="intake-rail-content"
-            hidden={!isIntakeOpen}
-          >
-            <InputForm
-              inputs={inputs}
-              summary={safeInputs}
-              onSubmit={handleInputSubmit}
-            />
-          </div>
-        </aside>
+      {currentPage === "patient" ? (
+        <PatientPage inputs={inputs} summary={safeInputs} onSubmit={handleInputSubmit} />
+      ) : null}
 
-        <section className="layout-grid">
-          <article className="card card--viz">
-          <section className="viz-shell">
-            <div className="viz-head">
-              <h2 className="section-title">Lung Visualization</h2>
-              <div className="viz-mode-toggle">
-                <button
-                  type="button"
-                  className={`chip ${vizMode === "2d" ? "chip--primary" : ""}`}
-                  onClick={() => setVizMode("2d")}
-                >
-                  2D
-                </button>
-                <button
-                  type="button"
-                  className={`chip ${vizMode === "3d" ? "chip--primary" : ""}`}
-                  onClick={() => setVizMode("3d")}
-                >
-                  3D
-                </button>
-              </div>
-            </div>
-            <p className="section-subtitle">
-              Pick a lung component from buttons or directly on the model.
-            </p>
+      {currentPage === "home" ? (
+        <HomePage
+          state={state}
+          seedKey={seedKey}
+          selectedPartId={selectedPartId}
+          onSelectPart={setSelectedPartId}
+          vizMode={vizMode}
+          onVizModeChange={setVizMode}
+        />
+      ) : null}
 
-            <div className="viz-part-buttons">
-              {VIZ_PART_BUTTONS.map((part) => (
-                <button
-                  key={part.id}
-                  type="button"
-                  className={`chip ${selectedPartId === part.id ? "chip--primary" : ""}`}
-                  onClick={() => setSelectedPartId(part.id)}
-                >
-                  {part.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="chip"
-                onClick={() => setSelectedPartId(null)}
-              >
-                Clear
-              </button>
-            </div>
-
-            {vizMode === "2d" ? (
-              <LungViz
-                state={state}
-                seedKey={seedKey}
-                selectedPartId={selectedPartId}
-                onSelectPart={setSelectedPartId}
-              />
-            ) : (
-              <LungsScene
-                selectedPartId={selectedPartId}
-                onSelectPart={setSelectedPartId}
-              />
-            )}
-          </section>
-          </article>
-
-          <article className="card card--coach">
-            <LungCoach selectedPartId={selectedPartId} state={state} />
-          </article>
-
-          <article className="card card--timeline">
-            <TimelineScrubber
-              previewDays={state.previewDays}
-              actualDays={state.daysSinceQuit}
-              maxDays={state.maxPreviewDays}
-              quitDateISO={safeInputs.quitDateISO}
-              onChange={setPreviewDays}
-            />
-          </article>
-
-          <article className="card card--activity">
-            <RecoveryActivity quitDateISO={safeInputs.quitDateISO} currentDaysSinceQuit={state.daysSinceQuit} />
-          </article>
-
-          <article className="card card--stats">
-            <StatsCards state={state} />
-          </article>
-
-          <article className="card card--breathing">
-            <BreathingDemo state={state} />
-          </article>
-
-          <article className="card card--badges">
-            <BadgeStrip badges={MILESTONE_BADGES} earnedBadgeIds={earnedBadgeIds} currentDays={state.daysSinceQuit} />
-          </article>
-
-          <article className="card card--method">
-            <MethodPanel />
-          </article>
-        </section>
-      </section>
-
+      {currentPage === "progress" ? (
+        <ProgressPage
+          state={state}
+          summary={safeInputs}
+          earnedBadgeIds={earnedBadgeIds}
+          onPreviewDaysChange={setPreviewDays}
+        />
+      ) : null}
     </main>
   );
 }

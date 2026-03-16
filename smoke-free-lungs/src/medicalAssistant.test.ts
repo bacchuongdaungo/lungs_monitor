@@ -26,6 +26,8 @@ function buildState(): RecoveryState {
     weightUnit: "kg",
     heightValue: 170,
     heightUnit: "cm",
+    vapeBrandName: "",
+    recoveryGoal: "Reach one full smoke-free year",
   };
 
   const validated = sanitizeInputs(inputs, now);
