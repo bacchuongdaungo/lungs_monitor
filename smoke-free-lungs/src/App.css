@@ -848,6 +848,32 @@
   color: #254741;
 }
 
+.lungs3d-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lungs3d-stat {
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid #ead6c9;
+  background: #fffaf7;
+}
+
+.lungs3d-stat span {
+  display: block;
+  color: #58736d;
+  font-size: 0.82rem;
+}
+
+.lungs3d-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: #214541;
+  font-family: "Baloo 2", "Trebuchet MS", sans-serif;
+}
+
 .lungs3d-stage {
   width: 100%;
   height: 420px;
@@ -866,6 +892,13 @@
   text-align: center;
   color: #496a63;
   font-weight: 700;
+}
+
+.lungs3d-fallback--loading {
+  min-height: 420px;
+  border: 1px dashed #d9c3b5;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffaf7 0%, #fff2ea 100%);
 }
 
 .lungs3d-disclaimer {
@@ -1336,6 +1369,10 @@
     grid-template-columns: 1fr;
   }
 
+  .lungs3d-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .summary-height-input-row {
     flex-wrap: wrap;
   }
@@ -1365,5 +1402,9 @@
   .viz-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .lungs3d-stats {
+    grid-template-columns: 1fr;
   }
 }

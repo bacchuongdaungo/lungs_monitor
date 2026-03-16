@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
+import type { RecoveryState } from "../../model";
 import { inhaleFactor, smoothValue } from "./breathingWave";
 import type { BreathingParams, LobeId, Lungs3DPartId } from "./types";
 
 type Props = {
   params: BreathingParams;
+  state: RecoveryState;
   onPick?: (id: Lungs3DPartId) => void;
   selected?: Lungs3DPartId | null;
 };
@@ -86,6 +88,26 @@ const PICKABLE_IDS: readonly Lungs3DPartId[] = [
   "bronchi",
 ] as const;
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function mixHex(a: number, b: number, t: number): number {
+  const color = new THREE.Color(a);
+  color.lerp(new THREE.Color(b), clamp(t, 0, 1));
+  return color.getHex();
+}
+
+function lobeSurfaceColor(base: number, state: RecoveryState): number {
+  const sootTint = mixHex(base, 0x463227, state.sootLoad * 0.72);
+  return mixHex(sootTint, 0xc65d49, state.inflammation * 0.38);
+}
+
+function airwaySurfaceColor(base: number, state: RecoveryState): number {
+  const tarTint = mixHex(base, 0x775243, state.tarBurden * 0.62);
+  return mixHex(tarTint, 0x85c4cf, state.mucus * 0.2);
+}
+
 function regionPostureFactor(region: LobeRegion, posture: BreathingParams["posture"]): number {
   if (posture === "upright") {
     if (region === "lower") return 1.2;
@@ -104,7 +126,7 @@ function effortFactor(effort: BreathingParams["effort"]): number {
   return 1.0;
 }
 
-export function LungsPrimitive({ params, onPick, selected = null }: Props) {
+export function LungsPrimitive({ params, state, onPick, selected = null }: Props) {
   const [hovered, setHovered] = useState<Lungs3DPartId | null>(null);
   const smoothRespRateRef = useRef<number>(params.respRateBpm);
   const elapsedSecRef = useRef<number>(0);
@@ -116,9 +138,10 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
   const rmlRef = useRef<LobeMesh>(null);
   const rllRef = useRef<LobeMesh>(null);
 
-  const sphereGeometry = useMemo(() => new THREE.SphereGeometry(1, 34, 24), []);
-  const tracheaGeometry = useMemo(() => new THREE.CylinderGeometry(0.09, 0.11, 0.95, 20), []);
-  const bronchusGeometry = useMemo(() => new THREE.CylinderGeometry(0.05, 0.07, 0.85, 16), []);
+  const sphereGeometry = useMemo(() => new THREE.SphereGeometry(1, 24, 16), []);
+  const tracheaGeometry = useMemo(() => new THREE.CylinderGeometry(0.09, 0.11, 0.95, 14), []);
+  const bronchusGeometry = useMemo(() => new THREE.CylinderGeometry(0.05, 0.07, 0.85, 12), []);
+  const heartGeometry = useMemo(() => new THREE.SphereGeometry(1, 18, 12), []);
 
   const lobeEntries = useMemo(
     () =>
@@ -137,8 +160,9 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
       sphereGeometry.dispose();
       tracheaGeometry.dispose();
       bronchusGeometry.dispose();
+      heartGeometry.dispose();
     };
-  }, [sphereGeometry, tracheaGeometry, bronchusGeometry]);
+  }, [sphereGeometry, tracheaGeometry, bronchusGeometry, heartGeometry]);
 
   useFrame((_, dt) => {
     smoothRespRateRef.current = smoothValue(
@@ -217,6 +241,12 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
 
   const highlightColor = 0x2f899d;
   const isActive = (id: Lungs3DPartId) => hovered === id || selected === id;
+  const healthyGlow = mixHex(0x000000, 0xa2ddd1, state.ciliaFunction * 0.45);
+  const tracheaColor = airwaySurfaceColor(0xd6b09c, state);
+  const bronchiColor = airwaySurfaceColor(0xcfa18d, state);
+  const airwayRoughness = clamp(0.48 + state.tarBurden * 0.22 + state.mucus * 0.08, 0.4, 0.86);
+  const airwayMetalness = clamp(0.02 + state.mucus * 0.06, 0.02, 0.12);
+  const restfulLift = 1 - clamp(state.overallDirtiness * 0.24, 0, 0.24);
 
   return (
     <group>
@@ -232,11 +262,11 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
           onClick={handlePick}
         >
           <meshStandardMaterial
-            color={0xd6b09c}
-            roughness={0.55}
-            metalness={0.04}
-            emissive={isActive("trachea") ? highlightColor : 0x000000}
-            emissiveIntensity={isActive("trachea") ? 0.42 : 0}
+            color={tracheaColor}
+            roughness={airwayRoughness}
+            metalness={airwayMetalness}
+            emissive={isActive("trachea") ? highlightColor : healthyGlow}
+            emissiveIntensity={isActive("trachea") ? 0.42 : 0.08 + state.ciliaFunction * 0.06}
           />
         </mesh>
         <mesh
@@ -251,11 +281,11 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
           onClick={handlePick}
         >
           <meshStandardMaterial
-            color={0xcfa18d}
-            roughness={0.58}
-            metalness={0.04}
-            emissive={isActive("bronchi") ? highlightColor : 0x000000}
-            emissiveIntensity={isActive("bronchi") ? 0.42 : 0}
+            color={bronchiColor}
+            roughness={airwayRoughness}
+            metalness={airwayMetalness}
+            emissive={isActive("bronchi") ? highlightColor : healthyGlow}
+            emissiveIntensity={isActive("bronchi") ? 0.42 : 0.08 + state.ciliaFunction * 0.06}
           />
         </mesh>
         <mesh
@@ -270,11 +300,11 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
           onClick={handlePick}
         >
           <meshStandardMaterial
-            color={0xcfa18d}
-            roughness={0.58}
-            metalness={0.04}
-            emissive={isActive("bronchi") ? highlightColor : 0x000000}
-            emissiveIntensity={isActive("bronchi") ? 0.42 : 0}
+            color={bronchiColor}
+            roughness={airwayRoughness}
+            metalness={airwayMetalness}
+            emissive={isActive("bronchi") ? highlightColor : healthyGlow}
+            emissiveIntensity={isActive("bronchi") ? 0.42 : 0.08 + state.ciliaFunction * 0.06}
           />
         </mesh>
       </group>
@@ -298,15 +328,30 @@ export function LungsPrimitive({ params, onPick, selected = null }: Props) {
             onClick={handlePick}
           >
             <meshStandardMaterial
-              color={style.color}
-              roughness={style.roughness}
-              metalness={0.03}
-              emissive={active ? highlightColor : 0x000000}
-              emissiveIntensity={active ? 0.45 : 0}
+              color={lobeSurfaceColor(style.color, state)}
+              roughness={clamp(style.roughness + state.sootLoad * 0.12, 0.55, 0.88)}
+              metalness={clamp(0.03 + state.mucus * 0.05, 0.03, 0.11)}
+              emissive={active ? highlightColor : healthyGlow}
+              emissiveIntensity={active ? 0.45 : 0.05 + state.ciliaFunction * 0.08}
             />
           </mesh>
         );
       })}
+
+      <mesh
+        geometry={heartGeometry}
+        position={[0, -1.92 - state.mucus * 0.06, -0.12]}
+        rotation={[0.18, 0, 0]}
+        scale={[0.38 * restfulLift, 0.44 * restfulLift, 0.38 * restfulLift]}
+      >
+        <meshStandardMaterial
+          color={mixHex(0xc76872, 0xf0a0a7, state.recoveryPercent * 0.5)}
+          roughness={0.42}
+          metalness={0.03}
+          emissive={0x8d4049}
+          emissiveIntensity={0.08}
+        />
+      </mesh>
     </group>
   );
 }

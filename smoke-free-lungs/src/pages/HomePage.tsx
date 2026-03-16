@@ -1,9 +1,14 @@
+import { Suspense, lazy } from "react";
 import { LungViz } from "../LungViz";
 import { BreathingDemo } from "../components/BreathingDemo";
 import { LungCoach } from "../components/LungCoach";
-import { LungsScene } from "../features/lungs";
 import type { LungPartId } from "../lungKnowledge";
 import type { RecoveryState } from "../model";
+
+const LungsScene = lazy(async () => {
+  const mod = await import("../features/lungs/LungsScene");
+  return { default: mod.LungsScene };
+});
 
 type Props = {
   state: RecoveryState;
@@ -87,10 +92,19 @@ export function HomePage({
                 onSelectPart={onSelectPart}
               />
             ) : (
-              <LungsScene
-                selectedPartId={selectedPartId}
-                onSelectPart={onSelectPart}
-              />
+              <Suspense
+                fallback={
+                  <div className="lungs3d-fallback lungs3d-fallback--loading">
+                    Loading the 3D lung model...
+                  </div>
+                }
+              >
+                <LungsScene
+                  state={state}
+                  selectedPartId={selectedPartId}
+                  onSelectPart={onSelectPart}
+                />
+              </Suspense>
             )}
           </section>
         </article>

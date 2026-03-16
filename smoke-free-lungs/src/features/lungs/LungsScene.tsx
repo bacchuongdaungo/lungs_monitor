@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { LungPartId } from "../../lungKnowledge";
+import type { RecoveryState } from "../../model";
 import { LungsPrimitive } from "./LungsPrimitive";
 import type { BreathingParams, Lungs3DPartId } from "./types";
 
 type Props = {
+  state: RecoveryState;
   selectedPartId?: LungPartId | null;
   onSelectPart?: (id: LungPartId) => void;
 };
@@ -19,6 +21,10 @@ const PART_LABELS: Record<Lungs3DPartId, string> = {
   RML: "Right Middle Lobe",
   RLL: "Right Lower Lobe",
 };
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 function supportsWebGL(): boolean {
   if (typeof document === "undefined") return false;
@@ -54,33 +60,44 @@ function primitiveToPart(id: Lungs3DPartId): LungPartId {
   return "right-lower-lobe";
 }
 
-export function LungsScene({ selectedPartId = null, onSelectPart }: Props) {
-  const [respRateBpm, setRespRateBpm] = useState<number>(14);
+export function LungsScene({ state, selectedPartId = null, onSelectPart }: Props) {
+  const [motionScale, setMotionScale] = useState<number>(100);
   const [posture, setPosture] = useState<BreathingParams["posture"]>("upright");
   const [localSelectedPartId, setLocalSelectedPartId] = useState<LungPartId | null>(null);
   const canRender3D = useMemo(() => supportsWebGL(), []);
 
   const effectiveSelectedPartId = selectedPartId ?? localSelectedPartId;
   const selectedPrimitiveId = partToPrimitive(effectiveSelectedPartId);
+  const derivedRespRateBpm = clamp(
+    state.respirationRatePerMin * (motionScale / 100),
+    8,
+    30,
+  );
+  const effort: BreathingParams["effort"] =
+    state.inflammation > 0.62 || state.mucus > 0.58
+      ? "heavy"
+      : state.inflammation > 0.32 || state.mucus > 0.28
+        ? "light"
+        : "rest";
   const params: BreathingParams = {
-    respRateBpm,
+    respRateBpm: derivedRespRateBpm,
     posture,
-    effort: "rest",
+    effort,
   };
 
   return (
     <section className="lungs3d-section">
       <div className="lungs3d-controls">
-        <label className="lungs3d-control" htmlFor="resp-rate-slider">
-          <span>Respiratory Rate: {respRateBpm.toFixed(0)} breaths/min</span>
+        <label className="lungs3d-control" htmlFor="motion-scale-slider">
+          <span>Breathing motion: {motionScale}% of your model rate</span>
           <input
-            id="resp-rate-slider"
+            id="motion-scale-slider"
             type="range"
-            min={8}
-            max={30}
+            min={80}
+            max={125}
             step={1}
-            value={respRateBpm}
-            onChange={(event) => setRespRateBpm(Number(event.target.value))}
+            value={motionScale}
+            onChange={(event) => setMotionScale(Number(event.target.value))}
           />
         </label>
 
@@ -105,6 +122,25 @@ export function LungsScene({ selectedPartId = null, onSelectPart }: Props) {
         </div>
       </div>
 
+      <div className="lungs3d-stats" aria-label="3D scene metrics">
+        <article className="lungs3d-stat">
+          <span>Live breathing rate</span>
+          <strong>{derivedRespRateBpm.toFixed(1)} breaths/min</strong>
+        </article>
+        <article className="lungs3d-stat">
+          <span>Surface soot</span>
+          <strong>{Math.round(state.sootLoad * 100)}%</strong>
+        </article>
+        <article className="lungs3d-stat">
+          <span>Inflammation tint</span>
+          <strong>{Math.round(state.inflammation * 100)}%</strong>
+        </article>
+        <article className="lungs3d-stat">
+          <span>Cilia glow</span>
+          <strong>{Math.round(state.ciliaFunction * 100)}%</strong>
+        </article>
+      </div>
+
       <div className="lungs3d-selection">
         Selected region: <strong>{selectedPrimitiveId ? PART_LABELS[selectedPrimitiveId] : "None"}</strong>
       </div>
@@ -112,24 +148,22 @@ export function LungsScene({ selectedPartId = null, onSelectPart }: Props) {
       <div className="lungs3d-stage">
         {canRender3D ? (
           <Canvas
-            shadows
+            gl={{ powerPreference: "high-performance", antialias: false }}
             camera={{ position: [0, 0.35, 5], fov: 38 }}
-            dpr={[1, 1.75]}
+            dpr={[1, 1.4]}
           >
             <color attach="background" args={["#fff7f2"]} />
-            <ambientLight intensity={0.62} />
+            <ambientLight intensity={0.78} />
             <directionalLight
-              castShadow
-              intensity={1}
+              intensity={0.9}
               position={[4, 5, 4]}
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
             />
-            <pointLight intensity={0.42} position={[-3, 2, 3]} />
+            <pointLight intensity={0.35} position={[-3, 2, 3]} />
 
             <group position={[0, -0.4, 0]}>
               <LungsPrimitive
                 params={params}
+                state={state}
                 selected={selectedPrimitiveId}
                 onPick={(id) => {
                   const nextPart = primitiveToPart(id);
@@ -142,8 +176,8 @@ export function LungsScene({ selectedPartId = null, onSelectPart }: Props) {
               />
             </group>
 
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.15, 0]} receiveShadow>
-              <circleGeometry args={[6, 48]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.15, 0]}>
+              <circleGeometry args={[6, 32]} />
               <meshStandardMaterial color="#f5dfd0" roughness={0.9} metalness={0.02} />
             </mesh>
 
@@ -162,7 +196,9 @@ export function LungsScene({ selectedPartId = null, onSelectPart }: Props) {
         )}
       </div>
 
-      <p className="lungs3d-disclaimer">Educational visualization; not a medical device.</p>
+      <p className="lungs3d-disclaimer">
+        Educational visualization; 3D breathing, color, and surface tone now follow the same recovery state used by the 2D model.
+      </p>
     </section>
   );
 }
