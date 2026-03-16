@@ -1,11 +1,10 @@
-import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
-  // ageYearsFromDOBISO,
   estimateCigsPerDay,
   MAX_CONSUMPTION_INTERVAL_COUNT,
   MAX_CONSUMPTION_QUANTITY,
   MAX_HEIGHT_CM,
-  // MAX_SMOKING_YEARS,
+  MAX_SMOKING_YEARS,
   MAX_WEIGHT_KG,
   MIN_CONSUMPTION_INTERVAL_COUNT,
   MIN_HEIGHT_CM,
@@ -15,10 +14,10 @@ import {
   type ConsumptionIntervalUnit,
   type ConsumptionUnit,
   type HeightUnit,
-  type InputErrors,
   type Inputs,
   type ValidatedInputs,
   type WeightUnit,
+  validateInputs,
 } from "../model";
 import {
   convertHeight,
@@ -30,15 +29,32 @@ import {
 
 type Props = {
   inputs: Inputs;
-  errors: InputErrors;
   summary: ValidatedInputs;
-  onChange: (key: keyof Inputs, value: Inputs[keyof Inputs]) => void;
+  onSubmit: (nextInputs: Inputs) => void;
 };
 
 const SEX_OPTIONS: Array<{ id: BiologicalSex; label: string }> = [
   { id: "female", label: "Female" },
   { id: "male", label: "Male" },
   { id: "other", label: "Other" },
+];
+
+const INPUT_KEYS: ReadonlyArray<keyof Inputs> = [
+  "smokingLengthMode",
+  "smokingStartDateISO",
+  "approxSmokingYears",
+  "quitDateISO",
+  "consumptionUnit",
+  "consumptionQuantity",
+  "consumptionIntervalUnit",
+  "consumptionIntervalCount",
+  "cigaretteBrandId",
+  "dobISO",
+  "biologicalSex",
+  "weightValue",
+  "weightUnit",
+  "heightValue",
+  "heightUnit",
 ];
 
 function ToggleIcon({ children }: { children: ReactNode }) {
@@ -70,11 +86,6 @@ function ToggleButton({
   );
 }
 
-function yearsText(startISO: string, quitISO: string): string {
-  const years = smokingYearsByDates(startISO, quitISO);
-  return `${years.toFixed(1)} years`;
-}
-
 function weightRangeText(unit: WeightUnit): string {
   if (unit === "kg") return `${MIN_WEIGHT_KG}-${MAX_WEIGHT_KG} kg`;
   return `${(MIN_WEIGHT_KG * 2.20462262).toFixed(0)}-${(MAX_WEIGHT_KG * 2.20462262).toFixed(0)} lb`;
@@ -91,6 +102,46 @@ function formatHeightValue(value: number, unit: HeightUnit): string {
   const feet = Math.floor(wholeInches / 12);
   const inches = wholeInches % 12;
   return `${feet} ft ${inches} in`;
+}
+
+function parseIsoDate(isoDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  return date;
+}
+
+function smokingDurationText(startISO: string, quitISO: string): string {
+  const years = smokingYearsByDates(startISO, quitISO);
+
+  const start = parseIsoDate(startISO);
+  const quit = parseIsoDate(quitISO);
+  if (!start || !quit) {
+    return `${years.toFixed(1)} years`;
+  }
+
+  const msPerDay = 86_400_000;
+  const days = Math.max(0, Math.round((quit.getTime() - start.getTime()) / msPerDay));
+
+  if (days < 30) {
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+
+  if (days < 365) {
+    const months = Math.max(1, Math.round(days / 30.44));
+    return `${months} month${months === 1 ? "" : "s"}`;
+  }
+
+  return `${years.toFixed(1)} years`;
 }
 
 function toNumberOrEmpty(value: string): number | "" {
@@ -171,472 +222,540 @@ function dynamicInputWidth(value: number | "", minDigits = 2, maxDigits = 6): st
   return `calc(${digits}ch + 2.7rem)`;
 }
 
-export function InputForm({ inputs, errors, summary, onChange }: Props) {
-  const quantity = Number(inputs.consumptionQuantity);
-  const intervalCount = Number(inputs.consumptionIntervalCount);
+function inputsEqual(a: Inputs, b: Inputs): boolean {
+  return INPUT_KEYS.every((key) => a[key] === b[key]);
+}
 
-  const estimatedCigsPerDay = estimateCigsPerDay(
-    inputs.consumptionUnit,
-    quantity,
-    inputs.consumptionIntervalUnit,
-    intervalCount,
+export function InputForm({ inputs, summary, onSubmit }: Props) {
+  const [draft, setDraft] = useState<Inputs>(inputs);
+  const [isEditing, setIsEditing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(inputs);
+  }, [inputs]);
+
+  const draftValidation = useMemo(() => validateInputs(draft), [draft]);
+  const draftErrors = draftValidation.errors;
+  const durationPreviewStartISO =
+    draftValidation.value?.smokingStartDateISO ??
+    (draft.smokingLengthMode === "exact_dates" ? draft.smokingStartDateISO : summary.smokingStartDateISO);
+
+  const hasDraftChanges = useMemo(() => !inputsEqual(draft, inputs), [draft, inputs]);
+
+  const estimatedDraftCigsPerDay = estimateCigsPerDay(
+    draft.consumptionUnit,
+    Number(draft.consumptionQuantity),
+    draft.consumptionIntervalUnit,
+    Number(draft.consumptionIntervalCount),
   );
 
-  // const ageYears = ageYearsFromDOBISO(inputs.dobISO);
-
-  function handleConsumptionUnitChange(nextUnit: ConsumptionUnit) {
-    if (nextUnit === inputs.consumptionUnit) return;
-
-    onChange("consumptionUnit", nextUnit);
-  }
-
-  function handleConsumptionIntervalUnitChange(nextUnit: ConsumptionIntervalUnit) {
-    if (nextUnit === inputs.consumptionIntervalUnit) return;
-
-    onChange("consumptionIntervalUnit", nextUnit);
-  }
-
-  function handleWeightUnitChange(nextUnit: WeightUnit) {
-    if (nextUnit === inputs.weightUnit) return;
-
-    const converted = convertNumberishInput(
-      inputs.weightValue,
-      (value) => convertWeight(value, inputs.weightUnit, nextUnit),
-      1,
-    );
-
-    onChange("weightUnit", nextUnit);
-    onChange("weightValue", converted);
-  }
-
-  function handleHeightUnitChange(nextUnit: HeightUnit) {
-    if (nextUnit === inputs.heightUnit) return;
-
-    const converted = convertNumberishInput(
-      inputs.heightValue,
-      (value) => convertHeight(value, inputs.heightUnit, nextUnit),
-      nextUnit === "cm" ? 1 : 0,
-    );
-
-    onChange("heightUnit", nextUnit);
-    onChange("heightValue", converted);
-  }
-
-  const hasHeightValue = typeof inputs.heightValue === "number";
-  const heightInchesValue = typeof inputs.heightValue === "number" ? inputs.heightValue : 0;
+  const hasHeightValue = typeof draft.heightValue === "number";
+  const heightInchesValue = typeof draft.heightValue === "number" ? draft.heightValue : 0;
   const feetInches = inchesToFeetInches(heightInchesValue);
   const numericFeet = feetInches.feet;
   const numericInches = feetInches.inches;
   const feetValue: number | "" = hasHeightValue ? numericFeet : "";
   const inchesValue: number | "" = hasHeightValue ? numericInches : "";
 
+  function updateDraft<K extends keyof Inputs>(key: K, value: Inputs[K]) {
+    setDraft((current) => {
+      if (current[key] === value) return current;
+      return {
+        ...current,
+        [key]: value,
+      };
+    });
+  }
+
+  function handleEditorToggle() {
+    if (isEditing) {
+      setDraft(inputs);
+      setSubmitError(null);
+      setIsEditing(false);
+      return;
+    }
+
+    setDraft(inputs);
+    setSubmitError(null);
+    setIsEditing(true);
+  }
+
+  function handleConsumptionUnitChange(nextUnit: ConsumptionUnit) {
+    if (nextUnit === draft.consumptionUnit) return;
+    updateDraft("consumptionUnit", nextUnit);
+  }
+
+  function handleConsumptionIntervalUnitChange(nextUnit: ConsumptionIntervalUnit) {
+    if (nextUnit === draft.consumptionIntervalUnit) return;
+    updateDraft("consumptionIntervalUnit", nextUnit);
+  }
+
+  function handleWeightUnitChange(nextUnit: WeightUnit) {
+    if (nextUnit === draft.weightUnit) return;
+
+    const converted = convertNumberishInput(
+      draft.weightValue,
+      (value) => convertWeight(value, draft.weightUnit, nextUnit),
+      1,
+    );
+
+    updateDraft("weightUnit", nextUnit);
+    updateDraft("weightValue", converted);
+  }
+
+  function handleHeightUnitChange(nextUnit: HeightUnit) {
+    if (nextUnit === draft.heightUnit) return;
+
+    const converted = convertNumberishInput(
+      draft.heightValue,
+      (value) => convertHeight(value, draft.heightUnit, nextUnit),
+      nextUnit === "cm" ? 1 : 0,
+    );
+
+    updateDraft("heightUnit", nextUnit);
+    updateDraft("heightValue", converted);
+  }
+
+  function handleCancel() {
+    setDraft(inputs);
+    setSubmitError(null);
+    setIsEditing(false);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (draftValidation.value == null) {
+      setSubmitError("Please fix highlighted fields before submitting.");
+      return;
+    }
+
+    onSubmit(draft);
+    setSubmitError(null);
+    setIsEditing(false);
+  }
+
   return (
     <section>
       <h2 className="section-title">Smoking History</h2>
-      <p className="section-subtitle">Edit directly in this summary view. Changes apply instantly.</p>
+      <p className="section-subtitle">Summary stays visible. Expand to update and submit changes.</p>
 
-      <div className="summary-block">
-        <h3 className="method-heading">Smoking length</h3>
-        <div className="summary-grid">
-          {/* <div>Mode:</div>
-          <strong>
-            <div className="toggle-row">
-              <ToggleButton
-                active={inputs.smokingLengthMode === "exact_dates"}
-                label="Exact start and end dates"
-                icon={
-                  <svg viewBox="0 0 20 20" width="14" height="14">
-                    <rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M2 8h16" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                }
-                onClick={() => onChange("smokingLengthMode", "exact_dates")}
-              />
-              <ToggleButton
-                active={inputs.smokingLengthMode === "approx_years"}
-                label="Approximate years"
-                icon={
-                  <svg viewBox="0 0 20 20" width="14" height="14">
-                    <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M10 6v5l3 2" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                }
-                onClick={() => onChange("smokingLengthMode", "approx_years")}
-              />
-            </div>
-          </strong> */}
-
-          {inputs.smokingLengthMode === "exact_dates" ? (
-            <>
-              <div>Start date:</div>
-              <strong>
-                <label className="summary-control" htmlFor="smokingStartDateISO">
-                  <input
-                    id="smokingStartDateISO"
-                    name="smokingStartDateISO"
-                    type="month"
-                    aria-label="Start date"
-                    value={inputs.smokingStartDateISO}
-                    onChange={(event) => onChange("smokingStartDateISO", event.target.value)}
-                  />
-                  {errors.smokingStartDateISO ? <span className="field-error" role="alert">{errors.smokingStartDateISO}</span> : null}
-                </label>
-              </strong>
-            </>
-          ) : (
-            <>
-              {/* <div>Approx. years:</div>
-              <strong>
-                <label className="summary-control" htmlFor="approxSmokingYears">
-                  <input
-                    id="approxSmokingYears"
-                    name="approxSmokingYears"
-                    type="number"
-                    step={0.25}
-                    aria-label="Approximate smoking years"
-                    value={inputs.approxSmokingYears}
-                    onChange={(event) => onChange("approxSmokingYears", normalizeNumberChange(event.currentTarget))}
-                    onKeyDown={handleKeyDown}
-                    onFocus={handleFocusSelectZero}
-                    onBlur={handleBlur}
-                  />
-                  <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years.</span>
-                  {errors.approxSmokingYears ? <span className="field-error" role="alert">{errors.approxSmokingYears}</span> : null}
-                </label>
-              </strong> */}
-            </>
-          )}
-
-          <div>End date (quit):</div>
-          <strong>
-            <label className="summary-control" htmlFor="quitDateISO">
-              <input
-                id="quitDateISO"
-                name="quitDateISO"
-                type="date"
-                aria-label="End date (quit)"
-                value={inputs.quitDateISO}
-                onChange={(event) => onChange("quitDateISO", event.target.value)}
-              />
-              {errors.quitDateISO ? <span className="field-error" role="alert">{errors.quitDateISO}</span> : null}
-            </label>
-          </strong>
-        </div>
-
-        <p className="summary-sentence">Smoking length estimate: {yearsText(summary.smokingStartDateISO, summary.quitDateISO)}</p>
-      </div>
-
-      <div className="summary-block">
-        <h3 className="method-heading">Smoking quantity/rate</h3>
-        <div className="summary-grid">
-          <div>Quantity:</div>
-          <strong>
-            <div className="summary-control">
-              <div className="summary-inline-control-row">
-                <label className="summary-inline-field" htmlFor="consumptionQuantity">
-                <input
-                  id="consumptionQuantity"
-                  name="consumptionQuantity"
-                  type="number"
-                  step={1}
-                  min={0}
-                  aria-label="Quantity"
-                  value={inputs.consumptionQuantity}
-                  onChange={(event) => onChange("consumptionQuantity", normalizeIntegerChange(event.currentTarget))}
-                  onKeyDown={handleIntegerKeyDown}
-                  onFocus={handleFocusSelectZero}
-                  onBlur={handleBlur}
-                />
-                </label>
-                <div className="toggle-row summary-inline-toggle-row">
-                  <ToggleButton
-                    active={inputs.consumptionUnit === "cigarettes"}
-                    label="Cigarettes"
-                    icon={
-                      <svg viewBox="0 0 20 20" width="14" height="14">
-                        <rect x="2" y="7" width="13" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="2" />
-                        <rect x="15" y="7" width="3" height="6" rx="1" fill="currentColor" />
-                      </svg>
-                    }
-                    onClick={() => handleConsumptionUnitChange("cigarettes")}
-                  />
-                  <ToggleButton
-                    active={inputs.consumptionUnit === "packs"}
-                    label="Packs"
-                    icon={
-                      <svg viewBox="0 0 20 20" width="14" height="14">
-                        <rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                        <path d="M3 8h14" stroke="currentColor" strokeWidth="2" />
-                      </svg>
-                    }
-                    onClick={() => handleConsumptionUnitChange("packs")}
-                  />
-                </div>
-                <span className="field-hint">0 to {MAX_CONSUMPTION_QUANTITY}</span>
-              </div>
-              {errors.consumptionQuantity ? <span className="field-error" role="alert">{errors.consumptionQuantity}</span> : null}
-            </div>
-          </strong>
-
-          <div>Time interval:</div>
-          <strong>
-            <div className="summary-control">
-              <div className="summary-inline-control-row">
-                <label className="summary-inline-field" htmlFor="consumptionIntervalCount">
-                <input
-                  id="consumptionIntervalCount"
-                  name="consumptionIntervalCount"
-                  type="number"
-                  step={1}
-                  min={0}
-                  aria-label="Time interval"
-                  value={inputs.consumptionIntervalCount}
-                  onChange={(event) => onChange("consumptionIntervalCount", normalizeNumberChange(event.currentTarget))}
-                  onKeyDown={handleIntegerKeyDown}
-                  onFocus={handleFocusSelectZero}
-                  onBlur={handleBlur}
-                />
-                </label>
-                <div className="toggle-row summary-inline-toggle-row">
-                  <ToggleButton
-                    active={inputs.consumptionIntervalUnit === "days"}
-                    label="Days"
-                    icon={
-                      <svg viewBox="0 0 20 20" width="14" height="14">
-                        <circle cx="10" cy="10" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
-                        <path d="M10 1v3M10 16v3M1 10h3M16 10h3" stroke="currentColor" strokeWidth="2" />
-                      </svg>
-                    }
-                    onClick={() => handleConsumptionIntervalUnitChange("days")}
-                  />
-                  <ToggleButton
-                    active={inputs.consumptionIntervalUnit === "weeks"}
-                    label="Weeks"
-                    icon={
-                      <svg viewBox="0 0 20 20" width="14" height="14">
-                        <rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                        <path d="M2 8h16M7 3v4M13 3v4" stroke="currentColor" strokeWidth="2" />
-                      </svg>
-                    }
-                    onClick={() => handleConsumptionIntervalUnitChange("weeks")}
-                  />
-                </div>
-                <span className="field-hint">{MIN_CONSUMPTION_INTERVAL_COUNT} to {MAX_CONSUMPTION_INTERVAL_COUNT}</span>
-              </div>
-              {errors.consumptionIntervalCount ? <span className="field-error" role="alert">{errors.consumptionIntervalCount}</span> : null}
-            </div>
-          </strong>
-
-          <div>Derived rate:</div>
-          <strong>
-            {estimatedCigsPerDay == null
-              ? "Enter quantity + interval to derive daily rate."
-              : <span className="value-unit">{estimatedCigsPerDay.toFixed(2)} cigarettes/day</span>}
-          </strong>
-          <div>Equivalent:</div>
-          <strong><span className="value-unit">{summary.packsPerWeek.toFixed(2)} packs/week</span></strong>
-        </div>
-      </div>
-
-      <div className="summary-block">
-        <h3 className="method-heading">Profile</h3>
-        <div className="summary-grid">
-          <div>DOB:</div>
-          <strong>
-            <label className="summary-control" htmlFor="dobISO">
-              <input
-                id="dobISO"
-                name="dobISO"
-                type="date"
-                aria-label="Date of birth"
-                value={inputs.dobISO}
-                onChange={(event) => onChange("dobISO", event.target.value)}
-              />
-              {/* <span className="field-hint">Age: {ageYears == null ? "--" : `${ageYears.toFixed(1)} years`}</span> */}
-              {errors.dobISO ? <span className="field-error" role="alert">{errors.dobISO}</span> : null}
-            </label>
-          </strong>
-
-          <div>Sex:</div>
-          <strong>
-            <label className="summary-control" htmlFor="biologicalSex">
-              <select
-                id="biologicalSex"
-                name="biologicalSex"
-                aria-label="Biological sex"
-                value={inputs.biologicalSex}
-                onChange={(event) => onChange("biologicalSex", event.target.value as BiologicalSex)}
-              >
-                {SEX_OPTIONS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {errors.biologicalSex ? <span className="field-error" role="alert">{errors.biologicalSex}</span> : null}
-            </label>
-          </strong>
-
-          <div>Weight:</div>
-          <strong>
-            <div className="summary-control">
-              <div className="summary-inline-control-row">
-                <label className="summary-inline-field" htmlFor="weightValue">
-                  <input
-                    id="weightValue"
-                    name="weightValue"
-                    type="number"
-                    step={0.1}
-                    aria-label="Weight"
-                    value={inputs.weightValue}
-                    onChange={(event) => onChange("weightValue", normalizeNumberChange(event.currentTarget))}
-                    onKeyDown={handleKeyDown}
-                    onFocus={handleFocusSelectZero}
-                    onBlur={handleBlur}
-                  />
-                </label>
-                <label className="summary-inline-field summary-inline-field--unit">
-                  <select
-                    aria-label="Weight unit"
-                    value={inputs.weightUnit}
-                    onChange={(event) => handleWeightUnitChange(event.target.value as WeightUnit)}
-                  >
-                    <option value="kg">kg</option>
-                    <option value="lb">lbs</option>
-                  </select>
-                </label>
-                <span className="field-hint">Supported: {weightRangeText(inputs.weightUnit)}</span>
-              </div>
-              {errors.weightValue ? <span className="field-error" role="alert">{errors.weightValue}</span> : null}
-            </div>
-          </strong>
-
-          <div>Height:</div>
-          <strong>
-            <div className="summary-control">
-              <div className="summary-height-input-row">
-                {inputs.heightUnit === "cm" ? (
-                  <label className="summary-inline-field summary-inline-field--height-cm" htmlFor="heightValue">
-                    <input
-                      id="heightValue"
-                      name="heightValue"
-                      type="number"
-                      step={1}
-                      min={0}
-                      aria-label="Height"
-                      value={inputs.heightValue}
-                      style={{ width: dynamicInputWidth(inputs.heightValue, 3, 6) }}
-                      onChange={(event) => onChange("heightValue", normalizeIntegerChange(event.currentTarget))}
-                      onKeyDown={handleIntegerKeyDown}
-                      onFocus={handleFocusSelectZero}
-                      onBlur={handleBlur}
-                    />
-                  </label>
-                ) : (
-                  <div className="summary-inline-field summary-inline-field--double summary-inline-field--double-compact">
-                    <label className="split-input split-input--inline" htmlFor="heightFeet">
-                      <input
-                        id="heightFeet"
-                        type="number"
-                        step={1}
-                        min={0}
-                        aria-label="Height feet"
-                        value={feetValue}
-                        style={{ width: dynamicInputWidth(feetValue, 2, 6) }}
-                        onChange={(event) => {
-                          const value = normalizeIntegerChange(event.currentTarget);
-                          if (value === "") {
-                            if (numericInches === 0) {
-                              onChange("heightValue", "");
-                            } else {
-                              onChange("heightValue", numericInches);
-                            }
-                            return;
-                          }
-                          onChange("heightValue", feetInchesToTotalInches(value, numericInches));
-                        }}
-                        onKeyDown={handleIntegerKeyDown}
-                        onFocus={handleFocusSelectZero}
-                        onBlur={handleBlur}
-                      />
-                      <span className="split-unit">ft</span>
-                    </label>
-                    <label className="split-input split-input--inline" htmlFor="heightInches">
-                      <input
-                        id="heightInches"
-                        type="number"
-                        step={1}
-                        min={0}
-                        max={11}
-                        aria-label="Height inches"
-                        value={inchesValue}
-                        style={{ width: dynamicInputWidth(inchesValue, 2, 4) }}
-                        onChange={(event) => {
-                          const value = normalizeIntegerChange(event.currentTarget);
-                          if (value === "") {
-                            if (numericFeet === 0) {
-                              onChange("heightValue", "");
-                            } else {
-                              onChange("heightValue", feetInchesToTotalInches(numericFeet, 0));
-                            }
-                            return;
-                          }
-                          const nextInches = typeof value === "number"
-                            ? Math.min(11, Math.max(0, value))
-                            : 0;
-                          onChange("heightValue", feetInchesToTotalInches(numericFeet, nextInches));
-                        }}
-                        onKeyDown={handleIntegerKeyDown}
-                        onFocus={handleFocusSelectZero}
-                        onBlur={handleBlur}
-                      />
-                      <span className="split-unit">in</span>
-                    </label>
-                  </div>
-                )}
-
-                <label className="summary-inline-field summary-inline-field--unit">
-                  <select
-                    aria-label="Height unit"
-                    value={inputs.heightUnit}
-                    onChange={(event) => handleHeightUnitChange(event.target.value as HeightUnit)}
-                  >
-                    <option value="cm">cm</option>
-                    <option value="in">ft/in</option>
-                  </select>
-                </label>
-              </div>
-              <span className="field-hint">Supported: {heightRangeText(inputs.heightUnit)}</span>
-              {errors.heightValue ? <span className="field-error" role="alert">{errors.heightValue}</span> : null}
-            </div>
-          </strong>
-
-          {/* <div>Current profile:</div>
-          <strong>
-            <span className="value-unit">{formatHeightValue(summary.heightValue, summary.heightUnit)}</span>
-            {", "}
-            <span className="value-unit">{summary.weightValue} {summary.weightUnit}</span>
-            {", "}
-            <span className="value-unit">{summary.ageYears.toFixed(1)} years old</span>
-            {" "}
-            {summary.biologicalSex}
-          </strong> */}
-        </div>
-      </div>
       <div className="summary-block">
         <h3 className="method-heading">Summary</h3>
-        <div className="summary-grid"></div>
-        <div>Current profile:</div>
-          <strong>
-            <span className="value-unit">{formatHeightValue(summary.heightValue, summary.heightUnit)}</span>
-            {", "}
-            <span className="value-unit">{summary.weightValue} {summary.weightUnit}</span>
-            {", "}
-            <span className="value-unit">{summary.ageYears.toFixed(1)} years old</span>
-            {" "}
-            {summary.biologicalSex} smoked for {yearsText(summary.smokingStartDateISO, summary.quitDateISO)} at a rate of {estimatedCigsPerDay == null ? "--" : `${estimatedCigsPerDay.toFixed(2)} cigarettes/day`}.
-          </strong>
+        <p className="summary-sentence">
+          Smoking length: {smokingDurationText(summary.smokingStartDateISO, summary.quitDateISO)}.
+        </p>
+        <p className="summary-sentence">
+          Pattern: {summary.consumptionQuantity} {summary.consumptionUnit} / {summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}.
+        </p>
+        <p className="summary-sentence">
+          Derived rate: {summary.cigsPerDay.toFixed(2)} cigarettes/day ({summary.packsPerWeek.toFixed(2)} packs/week).
+        </p>
+        <p className="summary-sentence">
+          Current profile: {formatHeightValue(summary.heightValue, summary.heightUnit)}, {summary.weightValue} {summary.weightUnit}, {summary.ageYears.toFixed(1)} years old {summary.biologicalSex}.
+        </p>
       </div>
+
+      <div className="intake-dropdown">
+        <button
+          type="button"
+          className="chip intake-dropdown-toggle"
+          onClick={handleEditorToggle}
+          aria-expanded={isEditing}
+          aria-controls="smoking-history-editor"
+        >
+          {isEditing ? "Close Editor" : "Update Smoking History"}
+        </button>
+      </div>
+
+      {isEditing ? (
+        <form id="smoking-history-editor" className="intake-editor" onSubmit={handleSubmit}>
+          <div className="summary-block">
+            <h3 className="method-heading">Smoking length</h3>
+            <div className="summary-grid">
+              <div>Mode:</div>
+              <strong>
+                <div className="toggle-row summary-inline-toggle-row">
+                  <button
+                    type="button"
+                    className={`chip ${draft.smokingLengthMode === "exact_dates" ? "chip--primary" : ""}`}
+                    onClick={() => updateDraft("smokingLengthMode", "exact_dates")}
+                  >
+                    Exact dates
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${draft.smokingLengthMode === "approx_years" ? "chip--primary" : ""}`}
+                    onClick={() => updateDraft("smokingLengthMode", "approx_years")}
+                  >
+                    Approx years
+                  </button>
+                </div>
+              </strong>
+
+              {draft.smokingLengthMode === "exact_dates" ? (
+                <>
+                  <div>Start date:</div>
+                  <strong>
+                    <label className="summary-control" htmlFor="smokingStartDateISO">
+                      <input
+                        id="smokingStartDateISO"
+                        name="smokingStartDateISO"
+                        type="date"
+                        aria-label="Start date"
+                        value={draft.smokingStartDateISO}
+                        onChange={(event) => updateDraft("smokingStartDateISO", event.target.value)}
+                      />
+                      {draftErrors.smokingStartDateISO ? <span className="field-error" role="alert">{draftErrors.smokingStartDateISO}</span> : null}
+                    </label>
+                  </strong>
+                </>
+              ) : (
+                <>
+                  <div>Approx years:</div>
+                  <strong>
+                    <label className="summary-control" htmlFor="approxSmokingYears">
+                      <input
+                        id="approxSmokingYears"
+                        name="approxSmokingYears"
+                        type="number"
+                        step={0.25}
+                        min={0}
+                        aria-label="Approximate smoking years"
+                        value={draft.approxSmokingYears}
+                        onChange={(event) => updateDraft("approxSmokingYears", normalizeNumberChange(event.currentTarget))}
+                        onKeyDown={handleKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
+                      />
+                      <span className="field-hint">Range: 0 to {MAX_SMOKING_YEARS} years</span>
+                      {draftErrors.approxSmokingYears ? <span className="field-error" role="alert">{draftErrors.approxSmokingYears}</span> : null}
+                    </label>
+                  </strong>
+                </>
+              )}
+
+              <div>End date (quit):</div>
+              <strong>
+                <label className="summary-control" htmlFor="quitDateISO">
+                  <input
+                    id="quitDateISO"
+                    name="quitDateISO"
+                    type="date"
+                    aria-label="End date (quit)"
+                    value={draft.quitDateISO}
+                    onChange={(event) => updateDraft("quitDateISO", event.target.value)}
+                  />
+                  {draftErrors.quitDateISO ? <span className="field-error" role="alert">{draftErrors.quitDateISO}</span> : null}
+                </label>
+              </strong>
+            </div>
+
+            <p className="summary-sentence">
+              Duration preview: {smokingDurationText(
+                durationPreviewStartISO,
+                draft.quitDateISO,
+              )}
+            </p>
+          </div>
+
+          <div className="summary-block">
+            <h3 className="method-heading">Smoking quantity/rate</h3>
+            <div className="summary-grid">
+              <div>Quantity:</div>
+              <strong>
+                <div className="summary-control">
+                  <div className="summary-inline-control-row">
+                    <label className="summary-inline-field" htmlFor="consumptionQuantity">
+                      <input
+                        id="consumptionQuantity"
+                        name="consumptionQuantity"
+                        type="number"
+                        step={1}
+                        min={0}
+                        aria-label="Quantity"
+                        value={draft.consumptionQuantity}
+                        onChange={(event) => updateDraft("consumptionQuantity", normalizeIntegerChange(event.currentTarget))}
+                        onKeyDown={handleIntegerKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
+                      />
+                    </label>
+                    <div className="toggle-row summary-inline-toggle-row">
+                      <ToggleButton
+                        active={draft.consumptionUnit === "cigarettes"}
+                        label="Cigarettes"
+                        icon={(
+                          <svg viewBox="0 0 20 20" width="14" height="14">
+                            <rect x="2" y="7" width="13" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <rect x="15" y="7" width="3" height="6" rx="1" fill="currentColor" />
+                          </svg>
+                        )}
+                        onClick={() => handleConsumptionUnitChange("cigarettes")}
+                      />
+                      <ToggleButton
+                        active={draft.consumptionUnit === "packs"}
+                        label="Packs"
+                        icon={(
+                          <svg viewBox="0 0 20 20" width="14" height="14">
+                            <rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <path d="M3 8h14" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                        )}
+                        onClick={() => handleConsumptionUnitChange("packs")}
+                      />
+                    </div>
+                    <span className="field-hint">0 to {MAX_CONSUMPTION_QUANTITY}</span>
+                  </div>
+                  {draftErrors.consumptionQuantity ? <span className="field-error" role="alert">{draftErrors.consumptionQuantity}</span> : null}
+                </div>
+              </strong>
+
+              <div>Time interval:</div>
+              <strong>
+                <div className="summary-control">
+                  <div className="summary-inline-control-row">
+                    <label className="summary-inline-field" htmlFor="consumptionIntervalCount">
+                      <input
+                        id="consumptionIntervalCount"
+                        name="consumptionIntervalCount"
+                        type="number"
+                        step={1}
+                        min={0}
+                        aria-label="Time interval"
+                        value={draft.consumptionIntervalCount}
+                        onChange={(event) => updateDraft("consumptionIntervalCount", normalizeIntegerChange(event.currentTarget))}
+                        onKeyDown={handleIntegerKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
+                      />
+                    </label>
+                    <div className="toggle-row summary-inline-toggle-row">
+                      <ToggleButton
+                        active={draft.consumptionIntervalUnit === "days"}
+                        label="Days"
+                        icon={(
+                          <svg viewBox="0 0 20 20" width="14" height="14">
+                            <circle cx="10" cy="10" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <path d="M10 1v3M10 16v3M1 10h3M16 10h3" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                        )}
+                        onClick={() => handleConsumptionIntervalUnitChange("days")}
+                      />
+                      <ToggleButton
+                        active={draft.consumptionIntervalUnit === "weeks"}
+                        label="Weeks"
+                        icon={(
+                          <svg viewBox="0 0 20 20" width="14" height="14">
+                            <rect x="2" y="3" width="16" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <path d="M2 8h16M7 3v4M13 3v4" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                        )}
+                        onClick={() => handleConsumptionIntervalUnitChange("weeks")}
+                      />
+                    </div>
+                    <span className="field-hint">{MIN_CONSUMPTION_INTERVAL_COUNT} to {MAX_CONSUMPTION_INTERVAL_COUNT}</span>
+                  </div>
+                  {draftErrors.consumptionIntervalCount ? <span className="field-error" role="alert">{draftErrors.consumptionIntervalCount}</span> : null}
+                </div>
+              </strong>
+
+              <div>Derived rate:</div>
+              <strong>
+                {estimatedDraftCigsPerDay == null
+                  ? "Let's see how much you smoked."
+                  : <span className="value-unit">{estimatedDraftCigsPerDay.toFixed(2)} cigarettes/day</span>}
+              </strong>
+            </div>
+          </div>
+
+          <div className="summary-block">
+            <h3 className="method-heading">Profile</h3>
+            <div className="summary-grid">
+              <div>DOB:</div>
+              <strong>
+                <label className="summary-control" htmlFor="dobISO">
+                  <input
+                    id="dobISO"
+                    name="dobISO"
+                    type="date"
+                    aria-label="Date of birth"
+                    value={draft.dobISO}
+                    onChange={(event) => updateDraft("dobISO", event.target.value)}
+                  />
+                  {draftErrors.dobISO ? <span className="field-error" role="alert">{draftErrors.dobISO}</span> : null}
+                </label>
+              </strong>
+
+              <div>Sex:</div>
+              <strong>
+                <label className="summary-control" htmlFor="biologicalSex">
+                  <select
+                    id="biologicalSex"
+                    name="biologicalSex"
+                    aria-label="Biological sex"
+                    value={draft.biologicalSex}
+                    onChange={(event) => updateDraft("biologicalSex", event.target.value as BiologicalSex)}
+                  >
+                    {SEX_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {draftErrors.biologicalSex ? <span className="field-error" role="alert">{draftErrors.biologicalSex}</span> : null}
+                </label>
+              </strong>
+
+              <div>Weight:</div>
+              <strong>
+                <div className="summary-control">
+                  <div className="summary-inline-control-row">
+                    <label className="summary-inline-field" htmlFor="weightValue">
+                      <input
+                        id="weightValue"
+                        name="weightValue"
+                        type="number"
+                        step={0.1}
+                        aria-label="Weight"
+                        value={draft.weightValue}
+                        onChange={(event) => updateDraft("weightValue", normalizeNumberChange(event.currentTarget))}
+                        onKeyDown={handleKeyDown}
+                        onFocus={handleFocusSelectZero}
+                        onBlur={handleBlur}
+                      />
+                    </label>
+                    <label className="summary-inline-field summary-inline-field--unit">
+                      <select
+                        aria-label="Weight unit"
+                        value={draft.weightUnit}
+                        onChange={(event) => handleWeightUnitChange(event.target.value as WeightUnit)}
+                      >
+                        <option value="kg">kg</option>
+                        <option value="lb">lbs</option>
+                      </select>
+                    </label>
+                    <span className="field-hint">Supported: {weightRangeText(draft.weightUnit)}</span>
+                  </div>
+                  {draftErrors.weightValue ? <span className="field-error" role="alert">{draftErrors.weightValue}</span> : null}
+                </div>
+              </strong>
+
+              <div>Height:</div>
+              <strong>
+                <div className="summary-control">
+                  <div className="summary-height-input-row">
+                    {draft.heightUnit === "cm" ? (
+                      <label className="summary-inline-field summary-inline-field--height-cm" htmlFor="heightValue">
+                        <input
+                          id="heightValue"
+                          name="heightValue"
+                          type="number"
+                          step={1}
+                          min={0}
+                          aria-label="Height"
+                          value={draft.heightValue}
+                          style={{ width: dynamicInputWidth(draft.heightValue, 3, 6) }}
+                          onChange={(event) => updateDraft("heightValue", normalizeIntegerChange(event.currentTarget))}
+                          onKeyDown={handleIntegerKeyDown}
+                          onFocus={handleFocusSelectZero}
+                          onBlur={handleBlur}
+                        />
+                      </label>
+                    ) : (
+                      <div className="summary-inline-field summary-inline-field--double summary-inline-field--double-compact">
+                        <label className="split-input split-input--inline" htmlFor="heightFeet">
+                          <input
+                            id="heightFeet"
+                            type="number"
+                            step={1}
+                            min={0}
+                            aria-label="Height feet"
+                            value={feetValue}
+                            style={{ width: dynamicInputWidth(feetValue, 2, 6) }}
+                            onChange={(event) => {
+                              const value = normalizeIntegerChange(event.currentTarget);
+                              if (value === "") {
+                                if (numericInches === 0) {
+                                  updateDraft("heightValue", "");
+                                } else {
+                                  updateDraft("heightValue", numericInches);
+                                }
+                                return;
+                              }
+                              updateDraft("heightValue", feetInchesToTotalInches(value, numericInches));
+                            }}
+                            onKeyDown={handleIntegerKeyDown}
+                            onFocus={handleFocusSelectZero}
+                            onBlur={handleBlur}
+                          />
+                          <span className="split-unit">ft</span>
+                        </label>
+                        <label className="split-input split-input--inline" htmlFor="heightInches">
+                          <input
+                            id="heightInches"
+                            type="number"
+                            step={1}
+                            min={0}
+                            max={11}
+                            aria-label="Height inches"
+                            value={inchesValue}
+                            style={{ width: dynamicInputWidth(inchesValue, 2, 4) }}
+                            onChange={(event) => {
+                              const value = normalizeIntegerChange(event.currentTarget);
+                              if (value === "") {
+                                if (numericFeet === 0) {
+                                  updateDraft("heightValue", "");
+                                } else {
+                                  updateDraft("heightValue", feetInchesToTotalInches(numericFeet, 0));
+                                }
+                                return;
+                              }
+                              const nextInches = typeof value === "number"
+                                ? Math.min(11, Math.max(0, value))
+                                : 0;
+                              updateDraft("heightValue", feetInchesToTotalInches(numericFeet, nextInches));
+                            }}
+                            onKeyDown={handleIntegerKeyDown}
+                            onFocus={handleFocusSelectZero}
+                            onBlur={handleBlur}
+                          />
+                          <span className="split-unit">in</span>
+                        </label>
+                      </div>
+                    )}
+
+                    <label className="summary-inline-field summary-inline-field--unit">
+                      <select
+                        aria-label="Height unit"
+                        value={draft.heightUnit}
+                        onChange={(event) => handleHeightUnitChange(event.target.value as HeightUnit)}
+                      >
+                        <option value="cm">cm</option>
+                        <option value="in">ft/in</option>
+                      </select>
+                    </label>
+                  </div>
+                  <span className="field-hint">Supported: {heightRangeText(draft.heightUnit)}</span>
+                  {draftErrors.heightValue ? <span className="field-error" role="alert">{draftErrors.heightValue}</span> : null}
+                </div>
+              </strong>
+            </div>
+          </div>
+
+          {submitError ? <p className="field-error">{submitError}</p> : null}
+
+          <div className="intake-actions">
+            <button type="button" className="chip" onClick={handleCancel}>
+              Cancel
+            </button>
+            <button type="submit" className="chip chip--primary" disabled={!hasDraftChanges}>
+              Submit
+            </button>
+          </div>
+        </form>
+      ) : null}
     </section>
   );
 }

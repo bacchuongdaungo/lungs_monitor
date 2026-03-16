@@ -168,13 +168,17 @@ function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function localDateToEpochDay(date: Date): number {
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / MS_PER_DAY);
+}
+
 function dateDiffDays(startISO: string, endISO: string): number {
   const start = parseISODateLocal(startISO);
   const end = parseISODateLocal(endISO);
   if (!start || !end) return 0;
 
-  const deltaMs = startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime();
-  return Math.max(0, Math.floor(deltaMs / MS_PER_DAY));
+  const deltaDays = localDateToEpochDay(end) - localDateToEpochDay(start);
+  return Math.max(0, deltaDays);
 }
 
 export function smokingYearsByDates(startISO: string, endISO: string): number {
@@ -281,8 +285,8 @@ export function daysSince(quitDateISO: string, now = new Date()): number {
   const quitDate = parseISODateLocal(quitDateISO);
   if (!quitDate) return 0;
 
-  const deltaMs = startOfLocalDay(now).getTime() - startOfLocalDay(quitDate).getTime();
-  return Math.max(0, Math.floor(deltaMs / MS_PER_DAY));
+  const deltaDays = localDateToEpochDay(now) - localDateToEpochDay(quitDate);
+  return Math.max(0, deltaDays);
 }
 
 function mifflinStJeorBmr(weightKg: number, heightCm: number, ageYears: number, sex: BiologicalSex): number {

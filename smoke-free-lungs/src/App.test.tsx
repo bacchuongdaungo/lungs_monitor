@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
+import { DEFAULT_BRAND_ID } from "./cigBrands";
+import { daysSince, type Inputs } from "./model";
 
 function formatISODateLocal(date: Date): string {
   const year = date.getFullYear();
@@ -17,6 +19,44 @@ function isoDaysAgo(daysAgo: number): string {
   return formatISODateLocal(date);
 }
 
+function defaultStoredInputs(quitDateISO: string): Inputs {
+  const now = new Date();
+  const smokingStart = new Date(now);
+  smokingStart.setFullYear(smokingStart.getFullYear() - 8);
+
+  const dob = new Date(now);
+  dob.setFullYear(dob.getFullYear() - 35);
+
+  return {
+    smokingLengthMode: "exact_dates",
+    smokingStartDateISO: formatISODateLocal(smokingStart),
+    approxSmokingYears: 8,
+    quitDateISO,
+    consumptionUnit: "cigarettes",
+    consumptionQuantity: 10,
+    consumptionIntervalUnit: "days",
+    consumptionIntervalCount: 1,
+    cigaretteBrandId: DEFAULT_BRAND_ID,
+    dobISO: formatISODateLocal(dob),
+    biologicalSex: "other",
+    weightValue: 70,
+    weightUnit: "kg",
+    heightValue: 170,
+    heightUnit: "cm",
+  };
+}
+
+function seedStoredState(quitDateISO: string) {
+  localStorage.setItem(
+    "sfl_state_v2",
+    JSON.stringify({
+      schemaVersion: 2,
+      inputs: defaultStoredInputs(quitDateISO),
+      earnedBadgeIds: [],
+    }),
+  );
+}
+
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -26,6 +66,8 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: /open smoking history/i }));
+    fireEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
     const qtyInput = screen.getByRole("spinbutton", { name: /quantity/i });
     await user.clear(qtyInput);
 
@@ -51,22 +93,21 @@ describe("App", () => {
   });
 
   it("unlocks badges at exact day thresholds and persists earned ids", async () => {
+    const targetQuitDate = isoDaysAgo(15);
+    seedStoredState(targetQuitDate);
     render(<App />);
 
-    const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
-    fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(3) } });
-
     await waitFor(() => {
-      expect(screen.getByTestId("badge-day-3")).toHaveAttribute("data-unlocked", "true");
+      expect(screen.getByTestId("badge-day-14")).toHaveAttribute("data-unlocked", "true");
     });
 
-    expect(screen.getByTestId("badge-day-14")).toHaveAttribute("data-unlocked", "false");
+    expect(screen.getByTestId("badge-day-30")).toHaveAttribute("data-unlocked", "false");
 
     await waitFor(() => {
       const savedRaw = localStorage.getItem("sfl_state_v2");
       expect(savedRaw).not.toBeNull();
       const saved = JSON.parse(savedRaw as string) as { earnedBadgeIds: string[] };
-      expect(saved.earnedBadgeIds).toContain("day-3");
+      expect(saved.earnedBadgeIds).toContain("day-14");
     });
   });
 
@@ -99,13 +140,13 @@ describe("App", () => {
   });
 
   it("keeps recovery activity tied to current day since quit", async () => {
+    const targetQuitDate = isoDaysAgo(12);
+    const expectedDaysSinceQuit = daysSince(targetQuitDate);
+    seedStoredState(targetQuitDate);
     render(<App />);
 
-    const quitDateInput = screen.getByLabelText(/end date \(quit\)/i);
-    fireEvent.change(quitDateInput, { target: { value: isoDaysAgo(12) } });
-
     await waitFor(() => {
-      expect(screen.getByText(/today, day 12 since quit/i)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`today, day ${expectedDaysSinceQuit} since quit`, "i"))).toBeInTheDocument();
     });
   });
 });

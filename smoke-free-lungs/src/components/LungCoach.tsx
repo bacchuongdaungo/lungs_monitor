@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { answerLungQuestion, getLungPartById, type LungPartId } from "../lungKnowledge";
-import { askMedicalLLM } from "../medicalAssistant";
+import {
+  askMedicalLLM,
+  type MedicalAdviceCitation,
+  type MedicalAdviceSafety,
+  type MedicalConversationMessage,
+} from "../medicalAssistant";
 import type { RecoveryState } from "../model";
 
 type Props = {
@@ -15,12 +20,25 @@ const QUICK_QUESTIONS = [
   "What is recovering right now?",
 ];
 
+const MAX_CONVERSATION_MESSAGES = 12;
+const URGENT_DEFAULT_MESSAGE =
+  "If you have severe chest pain, major trouble breathing, coughing blood, or blue lips/fingertips, seek emergency care now.";
+
+function clampConversation(messages: MedicalConversationMessage[]): MedicalConversationMessage[] {
+  return messages.slice(-MAX_CONVERSATION_MESSAGES);
+}
+
 export function LungCoach({ selectedPartId, state }: Props) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(
     "Ask about pain, function, recovery, or click a lung hotspot first.",
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [conversation, setConversation] = useState<MedicalConversationMessage[]>([]);
+  const [isUsingLLM, setIsUsingLLM] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [safety, setSafety] = useState<MedicalAdviceSafety | null>(null);
+  const [citations, setCitations] = useState<MedicalAdviceCitation[]>([]);
 
   const selectedPart = getLungPartById(selectedPartId);
 
@@ -28,22 +46,60 @@ export function LungCoach({ selectedPartId, state }: Props) {
     const finalPrompt = prompt.trim();
     if (!finalPrompt) {
       setAnswer(answerLungQuestion("", selectedPartId, state));
+      setStatusMessage("Enter a question to use AI assistance.");
+      setIsUsingLLM(false);
+      setSafety(null);
+      setCitations([]);
       return;
     }
 
     setIsLoading(true);
+    setStatusMessage("Trying AI medical assistant...");
+    setSafety(null);
+    setCitations([]);
 
-    const remoteAnswer = await askMedicalLLM({
+    const pendingConversation = clampConversation([
+      ...conversation,
+      {
+        role: "user",
+        content: finalPrompt,
+      },
+    ]);
+
+    const remoteAdvice = await askMedicalLLM({
       question: finalPrompt,
       selectedPartId,
       selectedPartLabel: selectedPart?.label ?? null,
       state,
+      conversation: pendingConversation,
     });
 
     const fallback = answerLungQuestion(finalPrompt, selectedPartId, state);
-    setAnswer(remoteAnswer ?? fallback);
+    if (remoteAdvice) {
+      setAnswer(remoteAdvice.answer);
+      setSafety(remoteAdvice.safety);
+      setCitations(remoteAdvice.citations ?? []);
+      setIsUsingLLM(true);
+      setStatusMessage("AI response received. Educational use only.");
+      setConversation(
+        clampConversation([
+          ...pendingConversation,
+          { role: "assistant", content: remoteAdvice.answer },
+        ]),
+      );
+    } else {
+      setAnswer(fallback);
+      setIsUsingLLM(false);
+      setStatusMessage("AI unavailable, using local explanation.");
+    }
+
     setIsLoading(false);
   }
+
+  const urgentMessage =
+    safety && (safety.urgency === "urgent" || safety.emergencyMessage)
+      ? safety.emergencyMessage ?? URGENT_DEFAULT_MESSAGE
+      : null;
 
   return (
     <section>
@@ -54,6 +110,13 @@ export function LungCoach({ selectedPartId, state }: Props) {
 
       <div className="coach-selected">
         Selected region: <strong>{selectedPart ? selectedPart.label : "None selected yet"}</strong>
+      </div>
+
+      <div className="coach-status" data-testid="coach-status">
+        <span className={`coach-pill ${isUsingLLM ? "coach-pill--llm" : "coach-pill--local"}`}>
+          {isUsingLLM ? "AI status: online" : "AI status: local fallback"}
+        </span>
+        {statusMessage ? <span className="coach-status-text">{statusMessage}</span> : null}
       </div>
 
       <div className="coach-row">
@@ -87,10 +150,31 @@ export function LungCoach({ selectedPartId, state }: Props) {
             }}
             disabled={isLoading}
           >
-            {prompt}
+          {prompt}
           </button>
         ))}
       </div>
+
+      {urgentMessage ? (
+        <aside className="coach-alert coach-alert--urgent" data-testid="coach-urgent-callout">
+          <strong>Urgent guidance:</strong> {urgentMessage}
+        </aside>
+      ) : null}
+
+      {isUsingLLM && citations.length > 0 ? (
+        <section className="coach-citations" data-testid="coach-citations">
+          <strong>Sources:</strong>
+          <ul>
+            {citations.map((citation) => (
+              <li key={`${citation.title}-${citation.url}`}>
+                <a href={citation.url} target="_blank" rel="noreferrer">
+                  {citation.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <article className="coach-answer" data-testid="qa-answer">
         {answer}

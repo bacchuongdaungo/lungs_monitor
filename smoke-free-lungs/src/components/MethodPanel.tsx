@@ -13,6 +13,7 @@ export function MethodPanel() {
         <li>Brand nicotine/tar values shape effective exposure, tar burden, nicotine dependence, and dopamine-tolerance proxies.</li>
         <li>Timeline projection is capped at the model day where recovery reaches 100% of its computed target.</li>
         <li>Ask-the-lungs supports optional medical LLM integration when endpoint is configured.</li>
+        <li>LLM guidance is educational only and must not be used as diagnosis or treatment instructions.</li>
       </ul>
 
       <h3 className="method-heading">Limits</h3>
@@ -20,6 +21,7 @@ export function MethodPanel() {
         <li>Brand chemistry values are approximate educational ranges, not lab-certified measurements for every pack.</li>
         <li>Dopamine and dependence outputs are proxies, not neurochemical diagnostics.</li>
         <li>LLM answers are educational explanations and may be incomplete or incorrect.</li>
+        <li>If there is severe chest pain, major breathing distress, coughing blood, or blue lips/fingertips, seek emergency care immediately.</li>
         <li>If symptoms persist or worsen, seek evaluation from a licensed clinician.</li>
       </ul>
 

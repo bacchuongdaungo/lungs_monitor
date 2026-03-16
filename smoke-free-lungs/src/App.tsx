@@ -23,7 +23,6 @@ import {
   parseISODateLocal,
   sanitizeInputs,
   todayISO,
-  validateInputs,
 } from "./model";
 import { loadStoredState, saveStoredState } from "./storage";
 
@@ -69,6 +68,7 @@ export default function App() {
   const [initialState] = useState(() => loadStoredState());
   const [initialInputs] = useState<Inputs>(() => initialState?.inputs ?? defaultInputs());
   const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
+  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>(() => {
@@ -85,7 +85,6 @@ export default function App() {
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
 
-  const validation = useMemo(() => validateInputs(inputs, now), [inputs, now]);
   const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
   const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
 
@@ -109,19 +108,13 @@ export default function App() {
 
   const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}`;
 
-  function handleInputChange(key: keyof Inputs, value: Inputs[keyof Inputs]) {
-    setInputs((current) => ({
-      ...current,
-      [key]: value,
-    }));
-
-    if (key === "quitDateISO" && typeof value === "string") {
-      const currentDaysSinceQuit = daysSince(value);
-      setPreviewDays(currentDaysSinceQuit);
-      setEarnedBadgeIds((persisted) =>
-        mergeEarnedBadgeIds(persisted, getEarnedBadgeIds(currentDaysSinceQuit)),
-      );
-    }
+  function handleInputSubmit(nextInputs: Inputs) {
+    setInputs(nextInputs);
+    const currentDaysSinceQuit = daysSince(nextInputs.quitDateISO);
+    setPreviewDays(currentDaysSinceQuit);
+    setEarnedBadgeIds((persisted) =>
+      mergeEarnedBadgeIds(persisted, getEarnedBadgeIds(currentDaysSinceQuit)),
+    );
   }
 
   return (
@@ -135,17 +128,32 @@ export default function App() {
         </p>
       </header>
 
-      <section className="layout-grid">
-        <article className="card card--intake">
-          <InputForm
-            inputs={inputs}
-            errors={validation.errors}
-            summary={safeInputs}
-            onChange={handleInputChange}
-          />
-        </article>
+      <section className={`layout-shell ${isIntakeOpen ? "layout-shell--intake-open" : ""}`}>
+        <aside className={`intake-rail ${isIntakeOpen ? "intake-rail--open" : ""}`}>
+          <button
+            type="button"
+            className="intake-rail-toggle"
+            aria-expanded={isIntakeOpen}
+            aria-controls="smoking-history-panel"
+            onClick={() => setIsIntakeOpen((current) => !current)}
+          >
+            {isIntakeOpen ? "Hide Smoking History" : "Open Smoking History"}
+          </button>
+          <div
+            id="smoking-history-panel"
+            className="intake-rail-content"
+            hidden={!isIntakeOpen}
+          >
+            <InputForm
+              inputs={inputs}
+              summary={safeInputs}
+              onSubmit={handleInputSubmit}
+            />
+          </div>
+        </aside>
 
-        <article className="card card--viz">
+        <section className="layout-grid">
+          <article className="card card--viz">
           <section className="viz-shell">
             <div className="viz-head">
               <h2 className="section-title">Lung Visualization</h2>
@@ -204,42 +212,44 @@ export default function App() {
               />
             )}
           </section>
-        </article>
+          </article>
 
-        <article className="card card--coach">
-          <LungCoach selectedPartId={selectedPartId} state={state} />
-        </article>
+          <article className="card card--coach">
+            <LungCoach selectedPartId={selectedPartId} state={state} />
+          </article>
 
-        <article className="card card--timeline">
-          <TimelineScrubber
-            previewDays={state.previewDays}
-            actualDays={state.daysSinceQuit}
-            maxDays={state.maxPreviewDays}
-            quitDateISO={safeInputs.quitDateISO}
-            onChange={setPreviewDays}
-          />
-        </article>
+          <article className="card card--timeline">
+            <TimelineScrubber
+              previewDays={state.previewDays}
+              actualDays={state.daysSinceQuit}
+              maxDays={state.maxPreviewDays}
+              quitDateISO={safeInputs.quitDateISO}
+              onChange={setPreviewDays}
+            />
+          </article>
 
-        <article className="card card--activity">
-          <RecoveryActivity quitDateISO={safeInputs.quitDateISO} currentDaysSinceQuit={state.daysSinceQuit} />
-        </article>
+          <article className="card card--activity">
+            <RecoveryActivity quitDateISO={safeInputs.quitDateISO} currentDaysSinceQuit={state.daysSinceQuit} />
+          </article>
 
-        <article className="card card--stats">
-          <StatsCards state={state} />
-        </article>
+          <article className="card card--stats">
+            <StatsCards state={state} />
+          </article>
 
-        <article className="card card--breathing">
-          <BreathingDemo state={state} />
-        </article>
+          <article className="card card--breathing">
+            <BreathingDemo state={state} />
+          </article>
 
-        <article className="card card--badges">
-          <BadgeStrip badges={MILESTONE_BADGES} earnedBadgeIds={earnedBadgeIds} currentDays={state.daysSinceQuit} />
-        </article>
+          <article className="card card--badges">
+            <BadgeStrip badges={MILESTONE_BADGES} earnedBadgeIds={earnedBadgeIds} currentDays={state.daysSinceQuit} />
+          </article>
 
-        <article className="card card--method">
-          <MethodPanel />
-        </article>
+          <article className="card card--method">
+            <MethodPanel />
+          </article>
+        </section>
       </section>
+
     </main>
   );
 }
