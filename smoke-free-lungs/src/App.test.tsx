@@ -93,13 +93,22 @@ describe("App", () => {
     render(<App />);
 
     const toggle = screen.getByRole("button", { name: /collapse sidebar/i });
+    expect(screen.getByRole("button", { name: /about/i })).toBeInTheDocument();
 
     await userEvent.click(toggle);
-    expect(screen.queryByText(/recovery dashboard/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /about/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
-    expect(screen.getByText(/recovery dashboard/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /about/i })).toBeInTheDocument();
+  });
+
+  it("navigates to the about page and shows disclaimers", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: /about/i }));
+    expect(screen.getByRole("heading", { name: /disclaimers and limits/i })).toBeInTheDocument();
+    expect(screen.getByText(/educational only/i)).toBeInTheDocument();
   });
 
   it("navigates to patient page and shows record fields for cigarette, vape, and goal", async () => {
@@ -128,6 +137,17 @@ describe("App", () => {
 
     expect(screen.getByRole("option", { name: /marlboro red/i })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /camel filters/i })).not.toBeInTheDocument();
+  });
+
+  it("updates the home-page recovery stage when the timeline selection changes", async () => {
+    render(<App />);
+
+    expect(screen.getByText(/gas exchange reset starts/i)).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText(/go to day number/i));
+    await userEvent.type(screen.getByLabelText(/go to day number/i), "30");
+
+    expect(screen.getByText(/mucociliary clearance improves/i)).toBeInTheDocument();
   });
 
   it("shows the stored recovery goal on the progress page", () => {

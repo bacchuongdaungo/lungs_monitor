@@ -414,6 +414,14 @@
   grid-column: span 12;
 }
 
+.page-grid--progress .card--activity {
+  grid-column: span 7;
+}
+
+.page-grid--progress .card--stats {
+  grid-column: span 5;
+}
+
 .intake-rail {
   width: 64px;
   position: sticky;
@@ -868,11 +876,27 @@
   accent-color: #2b7a78;
 }
 
+.timeline-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.timeline-field {
+  flex: 0 0 180px;
+}
+
+.timeline-field input {
+  min-width: 0;
+}
+
 .timeline-row {
-  margin-top: 12px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  flex: 1 1 420px;
 }
 
 .chip {

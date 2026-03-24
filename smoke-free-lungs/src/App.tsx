@@ -23,6 +23,7 @@ import {
   sanitizeInputs,
   todayISO,
 } from "./model";
+import { AboutPage } from "./pages/AboutPage";
 import { HomePage } from "./pages/HomePage";
 import { PatientPage } from "./pages/PatientPage";
 import { ProgressPage } from "./pages/ProgressPage";
@@ -64,7 +65,7 @@ function defaultInputs(now = new Date()): Inputs {
 }
 
 function normalizePage(value: string | null): AppPageId {
-  if (value === "patient" || value === "progress") return value;
+  if (value === "patient" || value === "progress" || value === "about") return value;
   return "home";
 }
 
@@ -89,13 +90,20 @@ function pageCopy(page: AppPageId, goal: string) {
       body: `Track the smoke-free streak, projected recovery curve, milestone badges, and goal progress. Current goal: ${goal}.`,
     };
   }
-  // if (page === "home") {
+
+  if (page === "about") {
     return {
-      eyebrow: "Smoke-Free Lungs",
-      title: "Visualize lung recovery and ask targeted questions about symptoms, function, and healing",
-      body: "The home page keeps the lung artwork and medical assistant together, while the rest of the record and progress tracking live on separate pages.",
+      eyebrow: "About",
+      title: "Read the disclaimers, safety boundaries, and model limitations before relying on the visualization",
+      body: "This page is dedicated to what the app can and cannot tell you, how the model is bounded, and when real medical care matters more than the projection.",
     };
-  
+  }
+
+  return {
+    eyebrow: "Smoke-Free Lungs",
+    title: "Visualize lung recovery and ask targeted questions about symptoms, function, and healing",
+    body: "The home page keeps the lung artwork and medical assistant together, while the rest of the record and progress tracking live on separate pages.",
+  };
 }
 
 export default function App() {
@@ -104,7 +112,7 @@ export default function App() {
   const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
-  const [brandCatalog, setBrandCatalog] = useState(() => getBrandCatalog());
+  const [, setBrandCatalog] = useState(() => getBrandCatalog());
   const [brandCatalogMeta, setBrandCatalogMeta] = useState<{
     status: "loading" | "ready";
     source: BrandCatalogResult["source"];
@@ -129,7 +137,7 @@ export default function App() {
 
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
-  const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now, brandCatalog]);
+  const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
   const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
   const effectivePreviewDays = useMemo(
     () => clampPreview(previewDays, fullRecoveryDay),
@@ -140,8 +148,8 @@ export default function App() {
     () => computeRecoveryState(safeInputs, effectivePreviewDays, now, fullRecoveryDay),
     [safeInputs, effectivePreviewDays, now, fullRecoveryDay],
   );
-  const cigaretteBrands = useMemo(() => getCigaretteBrands(), [brandCatalog]);
-  const vapeBrands = useMemo(() => getVapeBrands(), [brandCatalog]);
+  const cigaretteBrands = useMemo(() => getCigaretteBrands(), []);
+  const vapeBrands = useMemo(() => getVapeBrands(), []);
 
   const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.cigaretteBrandName}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}|${safeInputs.vapeBrandName}`;
   const hero = pageCopy(currentPage, safeInputs.recoveryGoal);
@@ -271,6 +279,7 @@ export default function App() {
                 </article>
               </div>
             </section>
+
           </div>
         ) : (
           <div className="dashboard-sidebar__collapsed-badge" aria-hidden="true">
@@ -280,38 +289,42 @@ export default function App() {
       </aside>
 
       <section className="dashboard-main">
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">{hero.eyebrow}</p>
-            <h1>{hero.title}</h1>
-            <p>{hero.body}</p>
-          </div>
+        {currentPage === "home" ? (
+          <header className="dashboard-header">
+            <div>
+              <p className="eyebrow">{hero.eyebrow}</p>
+              <h1>{hero.title}</h1>
+              <p>{hero.body}</p>
+            </div>
 
-          <div className="dashboard-header__meta">
-            <span className="dashboard-meta-pill">
-              <strong>{safeInputs.quitDateISO}</strong>
-              Quit date
-            </span>
-            <span className="dashboard-meta-pill">
-              <strong>{safeInputs.cigaretteBrandName}</strong>
-              Cigarette brand
-            </span>
-            <span className="dashboard-meta-pill">
-              <strong>{safeInputs.vapeBrandName || "None"}</strong>
-              Vape brand
-            </span>
-          </div>
-        </header>
+            <div className="dashboard-header__meta">
+              <span className="dashboard-meta-pill">
+                <strong>{safeInputs.quitDateISO}</strong>
+                Quit date
+              </span>
+              <span className="dashboard-meta-pill">
+                <strong>{safeInputs.cigaretteBrandName}</strong>
+                Cigarette brand
+              </span>
+              <span className="dashboard-meta-pill">
+                <strong>{safeInputs.vapeBrandName || "None"}</strong>
+                Vape brand
+              </span>
+            </div>
+          </header>
+        ) : null}
 
-        <section className="dashboard-strip" aria-label="Key metrics">
-          {dashboardStats.map((stat) => (
-            <article key={stat.label} className="dashboard-strip__card">
-              <span className="dashboard-strip__label">{stat.label}</span>
-              <strong className="dashboard-strip__value">{stat.value}</strong>
-              <small className="dashboard-strip__detail">{stat.detail}</small>
-            </article>
-          ))}
-        </section>
+        {currentPage === "home" ? (
+          <section className="dashboard-strip" aria-label="Key metrics">
+            {dashboardStats.map((stat) => (
+              <article key={stat.label} className="dashboard-strip__card">
+                <span className="dashboard-strip__label">{stat.label}</span>
+                <strong className="dashboard-strip__value">{stat.value}</strong>
+                <small className="dashboard-strip__detail">{stat.detail}</small>
+              </article>
+            ))}
+          </section>
+        ) : null}
 
         {currentPage === "patient" ? (
           <PatientPage inputs={inputs} summary={safeInputs} onSubmit={handleInputSubmit} cigaretteBrands={cigaretteBrands} vapeBrands={vapeBrands} brandCatalogStatus={brandCatalogMeta.status} brandCatalogSource={brandCatalogMeta.source} />
@@ -337,6 +350,8 @@ export default function App() {
             earnedBadgeIds={earnedBadgeIds}
           />
         ) : null}
+
+        {currentPage === "about" ? <AboutPage /> : null}
       </section>
     </main>
   );

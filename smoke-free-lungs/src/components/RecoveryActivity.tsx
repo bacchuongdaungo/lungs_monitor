@@ -57,6 +57,51 @@ function stageStatus(currentDays: number, stage: Stage): "done" | "active" | "ne
   return "active";
 }
 
+export function stageForDay(day: number): Stage {
+  return STAGES.find((stage) => day >= stage.startDay && day <= stage.endDay) ?? STAGES[STAGES.length - 1];
+}
+
+type RecoveryStagePreviewProps = {
+  quitDateISO: string;
+  selectedDaysSinceQuit: number;
+  currentDaysSinceQuit: number;
+};
+
+export function RecoveryStagePreview({
+  quitDateISO,
+  selectedDaysSinceQuit,
+  currentDaysSinceQuit,
+}: RecoveryStagePreviewProps) {
+  const activeStage = stageForDay(selectedDaysSinceQuit);
+  const windowStart = addDaysToISO(quitDateISO, activeStage.startDay) ?? quitDateISO;
+  const windowEnd = addDaysToISO(quitDateISO, activeStage.endDay) ?? quitDateISO;
+  const previewDate = addDaysToISO(quitDateISO, selectedDaysSinceQuit) ?? quitDateISO;
+  const projected = selectedDaysSinceQuit > currentDaysSinceQuit;
+  const title =
+    selectedDaysSinceQuit === currentDaysSinceQuit
+      ? "What Your Lungs Are Doing Now"
+      : "What Your Lungs Are Doing at This Timeline";
+
+  return (
+    <section>
+      <h2 className="section-title">{title}</h2>
+      <p className="section-subtitle">
+        Viewing day <strong>{selectedDaysSinceQuit}</strong> since quit on <strong>{previewDate}</strong>.
+        {projected ? " This is a projected stage based on the selected timeline." : " This matches the current smoke-free day."}
+      </p>
+
+      <article className={`activity activity--${stageStatus(selectedDaysSinceQuit, activeStage)}`}>
+        <header className="activity-head">
+          <strong>{activeStage.title}</strong>
+          <span>Day {activeStage.startDay}-{activeStage.endDay}</span>
+        </header>
+        <p>{activeStage.detail}</p>
+        <small>{windowStart} to {windowEnd}</small>
+      </article>
+    </section>
+  );
+}
+
 export function RecoveryActivity({ quitDateISO, currentDaysSinceQuit }: Props) {
   const timestamp = todayISO();
 

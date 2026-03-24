@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { LungViz } from "../LungViz";
 import { BreathingDemo } from "../components/BreathingDemo";
 import { LungCoach } from "../components/LungCoach";
+import { RecoveryStagePreview } from "../components/RecoveryActivity";
 import { TimelineScrubber } from "../components/TimelineScrubber";
 import type { LungPartId } from "../lungKnowledge";
 import type { RecoveryState } from "../model";
@@ -111,6 +112,12 @@ export function HomePage({
                 />
               </Suspense>
             )}
+
+            <RecoveryStagePreview
+              quitDateISO={quitDateISO}
+              selectedDaysSinceQuit={state.previewDays}
+              currentDaysSinceQuit={state.daysSinceQuit}
+            />
 
             <TimelineScrubber
               previewDays={state.previewDays}

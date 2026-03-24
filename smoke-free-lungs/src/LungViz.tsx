@@ -507,11 +507,11 @@ export function LungViz({ state, seedKey, selectedPartId = null, onSelectPart }:
         </text>
       </svg>
 
-      <div className="viz-caption">
+      {/* <div className="viz-caption">
         {state.isProjected
           ? `Previewing day ${state.previewDays} (current streak: ${state.daysSinceQuit} days).`
           : `Today is day ${state.daysSinceQuit} smoke-free.`}
-      </div>
+      </div> */}
       <div className="viz-vitals">
         Estimated resting pulse {state.restingHeartRateBpm.toFixed(0)} bpm • Breathing{" "}
         {state.respirationRatePerMin.toFixed(1)} breaths/min

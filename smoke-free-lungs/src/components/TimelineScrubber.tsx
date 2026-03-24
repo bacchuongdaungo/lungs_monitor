@@ -97,9 +97,6 @@ export function TimelineScrubber({ previewDays, actualDays, maxDays, quitDateISO
   return (
     <section>
       <h2 className="section-title">Recovery Timeline</h2>
-      <p className="section-subtitle">
-        Projection is capped at your model's full-recovery day ({maxDays}) where recovery reaches 100%.
-      </p>
 
       <label className="timeline-range" htmlFor="previewDays">
         <span>Viewing day {previewDays} since quit</span>
@@ -115,45 +112,47 @@ export function TimelineScrubber({ previewDays, actualDays, maxDays, quitDateISO
         />
       </label>
 
-      <label className="field" htmlFor="previewDaysInput">
-        <span className="field-label">Go to day number</span>
-        <input
-          id="previewDaysInput"
-          type="number"
-          min={0}
-          max={maxDays}
-          step={1}
-          value={previewInput}
-          onChange={(event) => commitPreviewInput(event.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-        />
-      </label>
+      <div className="timeline-controls">
+        <label className="field timeline-field" htmlFor="previewDaysInput">
+          <span className="field-label">Go to day number</span>
+          <input
+            id="previewDaysInput"
+            type="number"
+            min={0}
+            max={maxDays}
+            step={1}
+            value={previewInput}
+            onChange={(event) => commitPreviewInput(event.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+          />
+        </label>
 
-      <div className="timeline-row">
-        {QUICK_JUMPS.map((jump) => (
-          <button
-            key={jump.id}
-            type="button"
-            className="chip"
-            onClick={() => {
-              if (jump.deltaDays === "recovery") {
-                onChange(maxDays);
-                return;
-              }
+        <div className="timeline-row" aria-label="Timeline quick jumps">
+          {QUICK_JUMPS.map((jump) => (
+            <button
+              key={jump.id}
+              type="button"
+              className="chip"
+              onClick={() => {
+                if (jump.deltaDays === "recovery") {
+                  onChange(maxDays);
+                  return;
+                }
 
-              if (jump.deltaDays === 0) {
-                onChange(clampPreview(actualDays, maxDays));
-                return;
-              }
+                if (jump.deltaDays === 0) {
+                  onChange(clampPreview(actualDays, maxDays));
+                  return;
+                }
 
-              onChange(clampPreview(actualDays + jump.deltaDays, maxDays));
-            }}
-          >
-            {jump.label}
-          </button>
-        ))}
+                onChange(clampPreview(actualDays + jump.deltaDays, maxDays));
+              }}
+            >
+              {jump.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="timeline-meta">

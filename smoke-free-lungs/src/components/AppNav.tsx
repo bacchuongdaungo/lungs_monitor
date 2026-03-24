@@ -1,4 +1,4 @@
-type AppPageId = "home" | "patient" | "progress";
+type AppPageId = "home" | "patient" | "progress" | "about";
 
 type Props = {
   currentPage: AppPageId;
@@ -9,6 +9,7 @@ const NAV_ITEMS: readonly { id: AppPageId; label: string; detail: string }[] = [
   { id: "home", label: "Home", detail: "Visualization and lung coach" },
   { id: "patient", label: "Patient Record", detail: "Medical profile and habits" },
   { id: "progress", label: "Progress", detail: "Recovery tracking and goals" },
+  { id: "about", label: "About", detail: "Disclaimers and model limits" },
 ];
 
 export function AppNav({ currentPage, onNavigate }: Props) {
