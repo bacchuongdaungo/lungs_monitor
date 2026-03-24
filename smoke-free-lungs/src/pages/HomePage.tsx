@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { LungViz } from "../LungViz";
 import { BreathingDemo } from "../components/BreathingDemo";
 import { LungCoach } from "../components/LungCoach";
+import { TimelineScrubber } from "../components/TimelineScrubber";
 import type { LungPartId } from "../lungKnowledge";
 import type { RecoveryState } from "../model";
 
@@ -17,6 +18,8 @@ type Props = {
   onSelectPart: (partId: LungPartId | null) => void;
   vizMode: "2d" | "3d";
   onVizModeChange: (mode: "2d" | "3d") => void;
+  onPreviewDaysChange: (next: number) => void;
+  quitDateISO: string;
 };
 
 const VIZ_PART_BUTTONS: readonly { id: LungPartId; label: string }[] = [
@@ -36,6 +39,8 @@ export function HomePage({
   onSelectPart,
   vizMode,
   onVizModeChange,
+  onPreviewDaysChange,
+  quitDateISO,
 }: Props) {
   return (
     <section className="page-panel">
@@ -106,6 +111,14 @@ export function HomePage({
                 />
               </Suspense>
             )}
+
+            <TimelineScrubber
+              previewDays={state.previewDays}
+              actualDays={state.daysSinceQuit}
+              maxDays={state.maxPreviewDays}
+              quitDateISO={quitDateISO}
+              onChange={onPreviewDaysChange}
+            />
           </section>
         </article>
 

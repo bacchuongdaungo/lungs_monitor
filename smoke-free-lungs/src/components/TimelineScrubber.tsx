@@ -1,3 +1,4 @@
+import { useEffect, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { addDaysToISO } from "../model";
 
 type Props = {
@@ -20,9 +21,78 @@ function clampPreview(value: number, maxDays: number): number {
   return Math.max(0, Math.min(maxDays, Math.round(value)));
 }
 
+function toIntegerOrEmpty(value: string): number | "" {
+  if (value === "") return "";
+  const sanitized = value.replace(/^0+(?=\d)/, "");
+  const num = Number(sanitized);
+  return Number.isFinite(num) ? Math.round(num) : "";
+}
+
+function sanitizeInputDisplay(value: string): string {
+  if (value === "") return "";
+
+  const num = Number(value);
+  if (!Number.isFinite(num)) return value;
+
+  return Math.round(num).toString();
+}
+
 export function TimelineScrubber({ previewDays, actualDays, maxDays, quitDateISO, onChange }: Props) {
+  const [previewInput, setPreviewInput] = useState(() => previewDays.toString());
+
+  useEffect(() => {
+    setPreviewInput(previewDays.toString());
+  }, [previewDays]);
+
   const previewDateISO = addDaysToISO(quitDateISO, previewDays) ?? quitDateISO;
   const projected = previewDays > actualDays;
+
+  function commitPreviewInput(rawValue: string) {
+    const parsed = toIntegerOrEmpty(rawValue);
+
+    if (parsed === "") {
+      setPreviewInput("");
+      return;
+    }
+
+    const clamped = clampPreview(parsed, maxDays);
+    const normalized = clamped.toString();
+    setPreviewInput(normalized);
+    onChange(clamped);
+  }
+
+  function finalizePreviewInput(rawValue: string) {
+    const sanitized = sanitizeInputDisplay(rawValue);
+    if (sanitized === "") {
+      setPreviewInput(previewDays.toString());
+      return;
+    }
+
+    commitPreviewInput(sanitized);
+  }
+
+  function handleBlur(event: FocusEvent<HTMLInputElement>) {
+    finalizePreviewInput(event.currentTarget.value);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === ".") {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      finalizePreviewInput(event.currentTarget.value);
+      event.currentTarget.blur();
+    }
+  }
+
+  function handleFocus(event: FocusEvent<HTMLInputElement>) {
+    const parsed = Number(event.currentTarget.value);
+    if (event.currentTarget.value !== "" && Number.isFinite(parsed) && parsed === 0) {
+      event.currentTarget.select();
+    }
+  }
 
   return (
     <section>
@@ -53,8 +123,11 @@ export function TimelineScrubber({ previewDays, actualDays, maxDays, quitDateISO
           min={0}
           max={maxDays}
           step={1}
-          value={previewDays}
-          onChange={(event) => onChange(clampPreview(Number(event.target.value), maxDays))}
+          value={previewInput}
+          onChange={(event) => commitPreviewInput(event.currentTarget.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
         />
       </label>
 

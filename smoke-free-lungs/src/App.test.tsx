@@ -88,6 +88,19 @@ describe("App", () => {
     expect(screen.getByText(/ask the lungs/i)).toBeInTheDocument();
   });
 
+  it("lets the dashboard sidebar collapse and expand", async () => {
+    render(<App />);
+
+    const toggle = screen.getByRole("button", { name: /collapse sidebar/i });
+
+    await userEvent.click(toggle);
+    expect(screen.queryByText(/recovery dashboard/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
+    expect(screen.getByText(/recovery dashboard/i)).toBeInTheDocument();
+  });
+
   it("navigates to patient page and shows record fields for cigarette, vape, and goal", async () => {
     render(<App />);
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FocusEvent, type SubmitEvent, type KeyboardEvent, type ReactNode } from "react";
 import { CIGARETTE_BRANDS } from "../cigBrands";
 import {
   estimateCigsPerDay,
@@ -326,7 +326,7 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
     setIsEditing(false);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (draftValidation.value == null) {
