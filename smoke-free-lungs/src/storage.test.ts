@@ -26,6 +26,7 @@ describe("storage", () => {
         consumptionIntervalUnit: "days",
         consumptionIntervalCount: 1,
         cigaretteBrandId: "average-us-king",
+        cigaretteBrandName: "Average US king-size (reference)",
         dobISO: inferDOBFromAgeYears(35),
         biologicalSex: "other",
         weightValue: 70,
@@ -52,6 +53,7 @@ describe("storage", () => {
         consumptionIntervalUnit: "weeks",
         consumptionIntervalCount: 1,
         cigaretteBrandId: "marlboro-red",
+        cigaretteBrandName: "Marlboro Red",
         dobISO: "1984-02-01",
         biologicalSex: "male",
         weightValue: 83,
@@ -69,6 +71,7 @@ describe("storage", () => {
     expect(loaded?.earnedBadgeIds).toEqual(["day-1", "day-3"]);
     expect(loaded?.inputs.biologicalSex).toBe("male");
     expect(loaded?.inputs.cigaretteBrandId).toBe("marlboro-red");
+    expect(loaded?.inputs.cigaretteBrandName).toBe("Marlboro Red");
     expect(loaded?.inputs.consumptionUnit).toBe("packs");
     expect(loaded?.inputs.vapeBrandName).toBe("BlueMist");
     expect(loaded?.inputs.recoveryGoal).toBe("Reach 180 smoke-free days");

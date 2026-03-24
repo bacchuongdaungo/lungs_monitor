@@ -18,6 +18,7 @@ export type Inputs = {
   consumptionIntervalUnit: ConsumptionIntervalUnit;
   consumptionIntervalCount: number | "";
   cigaretteBrandId: string;
+  cigaretteBrandName: string;
   dobISO: string;
   biologicalSex: BiologicalSex;
   weightValue: number | "";
@@ -629,9 +630,11 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
     errors.biologicalSex = "Pick a biological sex.";
   }
 
-  const brand = getBrandById(inputs.cigaretteBrandId);
-  if (!brand) {
-    errors.cigaretteBrandId = "Pick a cigarette brand.";
+  const selectedBrand = getBrandById(inputs.cigaretteBrandId);
+  const fallbackBrand = getBrandById(DEFAULT_BRAND_ID);
+  const customCigaretteBrandName = normalizeOptionalText(inputs.cigaretteBrandName, 80);
+  if (!selectedBrand && !customCigaretteBrandName) {
+    errors.cigaretteBrandId = "Pick a cigarette brand or enter one.";
   }
 
   const recoveryGoal = normalizeOptionalText(inputs.recoveryGoal, 120);
@@ -639,7 +642,15 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
     errors.recoveryGoal = "Enter a recovery goal.";
   }
 
-  if (Object.keys(errors).length > 0 || !quitDate || !brand || estimatedCigsPerDay == null || ageYears == null) {
+  const chemistryBrand = selectedBrand ?? fallbackBrand;
+
+  if (
+    Object.keys(errors).length > 0 ||
+    !quitDate ||
+    !chemistryBrand ||
+    estimatedCigsPerDay == null ||
+    ageYears == null
+  ) {
     return { value: null, errors };
   }
 
@@ -662,7 +673,10 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
   );
 
   const pack = packYears(cigsPerDay, smokingYears);
-  const chemistryMultiplier = computeBrandChemistryMultiplier(brand.tarMg, brand.nicotineMg);
+  const chemistryMultiplier = computeBrandChemistryMultiplier(
+    chemistryBrand.tarMg,
+    chemistryBrand.nicotineMg,
+  );
 
   return {
     value: {
@@ -692,14 +706,14 @@ export function validateInputs(inputs: Inputs, now = new Date()): ValidationResu
       metabolismFactor,
       metabolismCategory,
       baselineRestingHeartRateBpm,
-      cigaretteBrandId: brand.id,
-      cigaretteBrandName: brand.name,
-      nicotineMgPerCig: brand.nicotineMg,
-      tarMgPerCig: brand.tarMg,
+      cigaretteBrandId: selectedBrand?.id ?? "",
+      cigaretteBrandName: customCigaretteBrandName || selectedBrand?.name || chemistryBrand.name,
+      nicotineMgPerCig: chemistryBrand.nicotineMg,
+      tarMgPerCig: chemistryBrand.tarMg,
       packYears: pack,
       effectivePackYears: pack * chemistryMultiplier,
-      dailyNicotineMg: brand.nicotineMg * cigsPerDay,
-      dailyTarMg: brand.tarMg * cigsPerDay,
+      dailyNicotineMg: chemistryBrand.nicotineMg * cigsPerDay,
+      dailyTarMg: chemistryBrand.tarMg * cigsPerDay,
       vapeBrandName: normalizeOptionalText(inputs.vapeBrandName, 80),
       recoveryGoal,
     },
@@ -769,10 +783,12 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
   const weightKg = clamp(toKg(weightValue, weightUnit), MIN_WEIGHT_KG, MAX_WEIGHT_KG);
   const heightCm = clamp(toCm(heightValue, heightUnit), MIN_HEIGHT_CM, MAX_HEIGHT_CM);
 
-  const brand = getBrandById(inputs.cigaretteBrandId) ?? getBrandById(DEFAULT_BRAND_ID);
+  const selectedBrand = getBrandById(inputs.cigaretteBrandId);
+  const brand = selectedBrand ?? getBrandById(DEFAULT_BRAND_ID);
   if (!brand) {
     throw new Error("Default cigarette brand is missing.");
   }
+  const cigaretteBrandName = normalizeOptionalText(inputs.cigaretteBrandName, 80);
   const vapeBrandName = normalizeOptionalText(inputs.vapeBrandName, 80);
   const recoveryGoal = normalizeOptionalText(inputs.recoveryGoal, 120) || DEFAULT_RECOVERY_GOAL;
 
@@ -817,8 +833,8 @@ export function sanitizeInputs(inputs: Inputs, now = new Date()): ValidatedInput
     metabolismFactor,
     metabolismCategory,
     baselineRestingHeartRateBpm,
-    cigaretteBrandId: brand.id,
-    cigaretteBrandName: brand.name,
+    cigaretteBrandId: selectedBrand?.id ?? "",
+    cigaretteBrandName: cigaretteBrandName || selectedBrand?.name || brand.name,
     nicotineMgPerCig: brand.nicotineMg,
     tarMgPerCig: brand.tarMg,
     packYears: pack,

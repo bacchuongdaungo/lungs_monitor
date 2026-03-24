@@ -582,6 +582,12 @@
   min-width: 0;
 }
 
+.summary-control-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #365450;
+}
+
 .summary-control input,
 .summary-control select {
   width: 100%;
@@ -598,6 +604,10 @@
 .summary-control select:focus {
   outline: 2px solid #2b7a78;
   outline-offset: 1px;
+}
+
+.catalog-select {
+  min-height: 160px;
 }
 
 .summary-inline-control-row {

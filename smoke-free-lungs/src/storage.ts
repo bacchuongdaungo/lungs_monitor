@@ -1,5 +1,5 @@
 // src/storage.ts
-import { DEFAULT_BRAND_ID } from "./cigBrands";
+import { DEFAULT_BRAND_ID, getBrandById } from "./cigBrands";
 import {
   addDaysToISO,
   inferDOBFromAgeYears,
@@ -121,6 +121,14 @@ function normalizeInputs(value: unknown): Inputs | null {
       typeof record.cigaretteBrandId === "string" && record.cigaretteBrandId.length > 0
         ? record.cigaretteBrandId
         : DEFAULT_BRAND_ID,
+    cigaretteBrandName:
+      typeof record.cigaretteBrandName === "string" && record.cigaretteBrandName.trim().length > 0
+        ? record.cigaretteBrandName
+        : getBrandById(
+            typeof record.cigaretteBrandId === "string" && record.cigaretteBrandId.length > 0
+              ? record.cigaretteBrandId
+              : DEFAULT_BRAND_ID,
+          )?.name ?? "",
     dobISO:
       typeof record.dobISO === "string"
         ? record.dobISO

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { CIGARETTE_BRANDS } from "../cigBrands";
+import { useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import type { BrandCatalogResult, CigaretteBrand, VapeBrand } from "../cigBrands";
 import {
   estimateCigsPerDay,
   MAX_CONSUMPTION_INTERVAL_COUNT,
@@ -32,6 +32,10 @@ type Props = {
   inputs: Inputs;
   summary: ValidatedInputs;
   onSubmit: (nextInputs: Inputs) => void;
+  cigaretteBrands: CigaretteBrand[];
+  vapeBrands: VapeBrand[];
+  brandCatalogStatus: "loading" | "ready";
+  brandCatalogSource: BrandCatalogResult["source"];
 };
 
 const SEX_OPTIONS: Array<{ id: BiologicalSex; label: string }> = [
@@ -50,6 +54,7 @@ const INPUT_KEYS: ReadonlyArray<keyof Inputs> = [
   "consumptionIntervalUnit",
   "consumptionIntervalCount",
   "cigaretteBrandId",
+  "cigaretteBrandName",
   "dobISO",
   "biologicalSex",
   "weightValue",
@@ -229,14 +234,58 @@ function inputsEqual(a: Inputs, b: Inputs): boolean {
   return INPUT_KEYS.every((key) => a[key] === b[key]);
 }
 
-export function InputForm({ inputs, summary, onSubmit }: Props) {
+function findCigaretteBrandByName(brands: CigaretteBrand[], query: string): CigaretteBrand | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return null;
+  return brands.find((brand) => brand.name.trim().toLowerCase() === normalizedQuery) ?? null;
+}
+
+function findVapeBrandByName(brands: VapeBrand[], query: string): VapeBrand | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return null;
+  return brands.find((brand) => brand.name.trim().toLowerCase() === normalizedQuery) ?? null;
+}
+
+function filterBrandsByQuery<T extends { name: string }>(brands: T[], query: string): T[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return brands;
+  return brands.filter((brand) => brand.name.trim().toLowerCase().includes(normalizedQuery));
+}
+
+function formatCountedUnit(value: number, unit: ConsumptionUnit | ConsumptionIntervalUnit): string {
+  if (value === 1) {
+    if (unit === "cigarettes") return "cigarette";
+    if (unit === "packs") return "pack";
+    if (unit === "days") return "day";
+    return "week";
+  }
+
+  return unit;
+}
+
+function formatSmokingPattern(
+  quantity: number,
+  consumptionUnit: ConsumptionUnit,
+  intervalCount: number,
+  intervalUnit: ConsumptionIntervalUnit,
+): string {
+  return `${quantity} ${formatCountedUnit(quantity, consumptionUnit)} / ${intervalCount} ${formatCountedUnit(intervalCount, intervalUnit)}`;
+}
+
+export function InputForm({
+  inputs,
+  summary,
+  onSubmit,
+  cigaretteBrands,
+  vapeBrands,
+  brandCatalogStatus,
+  brandCatalogSource,
+}: Props) {
   const [draft, setDraft] = useState<Inputs>(inputs);
   const [isEditing, setIsEditing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDraft(inputs);
-  }, [inputs]);
+  const [cigaretteBrandQuery, setCigaretteBrandQuery] = useState("");
+  const [vapeBrandQuery, setVapeBrandQuery] = useState("");
 
   const draftValidation = useMemo(() => validateInputs(draft), [draft]);
   const draftErrors = draftValidation.errors;
@@ -260,6 +309,24 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
   const numericInches = feetInches.inches;
   const feetValue: number | "" = hasHeightValue ? numericFeet : "";
   const inchesValue: number | "" = hasHeightValue ? numericInches : "";
+  const selectedCigaretteBrand =
+    cigaretteBrands.find((brand) => brand.id === draft.cigaretteBrandId) ?? null;
+  const selectedVapeBrand =
+    vapeBrands.find((brand) => brand.name === draft.vapeBrandName) ?? null;
+  const filteredCigaretteBrands = useMemo(
+    () => filterBrandsByQuery(cigaretteBrands, cigaretteBrandQuery),
+    [cigaretteBrands, cigaretteBrandQuery],
+  );
+  const filteredVapeBrands = useMemo(
+    () => filterBrandsByQuery(vapeBrands, vapeBrandQuery),
+    [vapeBrands, vapeBrandQuery],
+  );
+  const brandCatalogLabel =
+    brandCatalogStatus === "loading"
+      ? "Refreshing brand catalog..."
+      : brandCatalogSource === "remote"
+        ? "Catalog source: live brand database"
+        : "Catalog source: local fallback list";
 
   function updateDraft<K extends keyof Inputs>(key: K, value: Inputs[K]) {
     setDraft((current) => {
@@ -274,12 +341,16 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
   function handleEditorToggle() {
     if (isEditing) {
       setDraft(inputs);
+      setCigaretteBrandQuery("");
+      setVapeBrandQuery("");
       setSubmitError(null);
       setIsEditing(false);
       return;
     }
 
     setDraft(inputs);
+    setCigaretteBrandQuery("");
+    setVapeBrandQuery("");
     setSubmitError(null);
     setIsEditing(true);
   }
@@ -322,14 +393,17 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
 
   function handleCancel() {
     setDraft(inputs);
+    setCigaretteBrandQuery("");
+    setVapeBrandQuery("");
     setSubmitError(null);
     setIsEditing(false);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextValidation = validateInputs(draft);
 
-    if (draftValidation.value == null) {
+    if (nextValidation.value == null) {
       setSubmitError("Please fix highlighted fields before submitting.");
       return;
     }
@@ -350,7 +424,12 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
           Smoking length: {smokingDurationText(summary.smokingStartDateISO, summary.quitDateISO)}.
         </p>
         <p className="summary-sentence">
-          Pattern: {summary.consumptionQuantity} {summary.consumptionUnit} / {summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}.
+          Pattern: {formatSmokingPattern(
+            summary.consumptionQuantity,
+            summary.consumptionUnit,
+            summary.consumptionIntervalCount,
+            summary.consumptionIntervalUnit,
+          )}.
         </p>
         <p className="summary-sentence">
           Derived rate: {summary.cigsPerDay.toFixed(2)} cigarettes/day ({summary.packsPerWeek.toFixed(2)} packs/week).
@@ -755,39 +834,129 @@ export function InputForm({ inputs, summary, onSubmit }: Props) {
             <div className="summary-grid">
               <div>Cigarette brand:</div>
               <strong>
-                <label className="summary-control" htmlFor="cigaretteBrandId">
+                <div className="summary-control">
+                  <label className="summary-control-label" htmlFor="cigaretteBrandSearch">
+                    Search cigarette catalog
+                  </label>
+                  <input
+                    id="cigaretteBrandSearch"
+                    name="cigaretteBrandSearch"
+                    type="text"
+                    aria-label="Search cigarette catalog"
+                    placeholder="Type to narrow the cigarette list"
+                    value={cigaretteBrandQuery}
+                    onChange={(event) => {
+                      const query = event.target.value;
+                      setCigaretteBrandQuery(query);
+                      const matchedBrand = findCigaretteBrandByName(cigaretteBrands, query);
+                      if (matchedBrand) {
+                        updateDraft("cigaretteBrandId", matchedBrand.id);
+                        updateDraft("cigaretteBrandName", matchedBrand.name);
+                        return;
+                      }
+                      if (query.trim()) {
+                        updateDraft("cigaretteBrandId", "");
+                        updateDraft("cigaretteBrandName", "");
+                      }
+                    }}
+                  />
+                  <label className="summary-control-label" htmlFor="cigaretteBrandId">
+                    Cigarette brand
+                  </label>
                   <select
                     id="cigaretteBrandId"
                     name="cigaretteBrandId"
                     aria-label="Cigarette brand"
+                    className="catalog-select"
+                    size={7}
                     value={draft.cigaretteBrandId}
-                    onChange={(event) => updateDraft("cigaretteBrandId", event.target.value)}
+                    onChange={(event) => {
+                      const selectedBrand = cigaretteBrands.find((brand) => brand.id === event.target.value) ?? null;
+                      updateDraft("cigaretteBrandId", selectedBrand?.id ?? "");
+                      updateDraft("cigaretteBrandName", selectedBrand?.name ?? "");
+                      setCigaretteBrandQuery("");
+                    }}
                   >
-                    {CIGARETTE_BRANDS.map((brand) => (
+                    {filteredCigaretteBrands.map((brand) => (
                       <option key={brand.id} value={brand.id}>
                         {brand.name}
                       </option>
                     ))}
                   </select>
+                  <span className="field-hint">{brandCatalogLabel}</span>
+                  <span className="field-hint">Type to narrow the list, or scroll the full catalog when the search is empty.</span>
+                  {selectedCigaretteBrand ? (
+                    <span className="field-hint">
+                      {selectedCigaretteBrand.manufacturer} · {selectedCigaretteBrand.nicotineMg.toFixed(1)}mg nicotine · {selectedCigaretteBrand.tarMg.toFixed(0)}mg tar
+                    </span>
+                  ) : null}
+                  {cigaretteBrandQuery.trim() && filteredCigaretteBrands.length === 0 ? (
+                    <span className="field-hint">No cigarette brands match the current search.</span>
+                  ) : null}
                   {draftErrors.cigaretteBrandId ? <span className="field-error" role="alert">{draftErrors.cigaretteBrandId}</span> : null}
-                </label>
+                </div>
               </strong>
 
               <div>Vape brand:</div>
               <strong>
-                <label className="summary-control" htmlFor="vapeBrandName">
+                <div className="summary-control">
+                  <label className="summary-control-label" htmlFor="vapeBrandSearch">
+                    Search vape catalog
+                  </label>
                   <input
+                    id="vapeBrandSearch"
+                    name="vapeBrandSearch"
+                    type="text"
+                    aria-label="Search vape catalog"
+                    placeholder="Type to narrow the vape list"
+                    value={vapeBrandQuery}
+                    onChange={(event) => {
+                      const query = event.target.value;
+                      setVapeBrandQuery(query);
+                      const matchedBrand = findVapeBrandByName(vapeBrands, query);
+                      if (matchedBrand) {
+                        updateDraft("vapeBrandName", matchedBrand.name);
+                        return;
+                      }
+                      if (query.trim()) {
+                        updateDraft("vapeBrandName", "");
+                      }
+                    }}
+                  />
+                  <label className="summary-control-label" htmlFor="vapeBrandName">
+                    Vape brand
+                  </label>
+                  <select
                     id="vapeBrandName"
                     name="vapeBrandName"
-                    type="text"
-                    maxLength={80}
                     aria-label="Vape brand"
-                    placeholder="Optional vape brand"
+                    className="catalog-select"
+                    size={6}
                     value={draft.vapeBrandName}
-                    onChange={(event) => updateDraft("vapeBrandName", event.target.value)}
-                  />
-                  <span className="field-hint">Optional. Stored in the patient record only.</span>
-                </label>
+                    onChange={(event) => {
+                      updateDraft("vapeBrandName", event.target.value);
+                      setVapeBrandQuery("");
+                    }}
+                  >
+                    <option value="">No vape brand recorded</option>
+                    {filteredVapeBrands.map((brand) => (
+                      <option key={brand.id} value={brand.name}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="field-hint">Selectable from the same catalog feed as cigarette brands.</span>
+                  <span className="field-hint">Type to narrow the list, or scroll the full catalog when the search is empty.</span>
+                  {selectedVapeBrand ? (
+                    <span className="field-hint">
+                      {selectedVapeBrand.manufacturer}
+                      {selectedVapeBrand.nicotineMg != null ? ` · ${selectedVapeBrand.nicotineMg.toFixed(1)}mg nicotine` : ""}
+                    </span>
+                  ) : null}
+                  {vapeBrandQuery.trim() && filteredVapeBrands.length === 0 ? (
+                    <span className="field-hint">No vape brands match the current search.</span>
+                  ) : null}
+                </div>
               </strong>
 
               <div>Recovery goal:</div>

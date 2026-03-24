@@ -1,13 +1,37 @@
+import type { BrandCatalogResult, CigaretteBrand, VapeBrand } from "../cigBrands";
 import { InputForm } from "../components/InputForm";
-import type { Inputs, ValidatedInputs } from "../model";
+import type { ConsumptionIntervalUnit, ConsumptionUnit, Inputs, ValidatedInputs } from "../model";
 
 type Props = {
   inputs: Inputs;
   summary: ValidatedInputs;
   onSubmit: (nextInputs: Inputs) => void;
+  cigaretteBrands: CigaretteBrand[];
+  vapeBrands: VapeBrand[];
+  brandCatalogStatus: "loading" | "ready";
+  brandCatalogSource: BrandCatalogResult["source"];
 };
 
-export function PatientPage({ inputs, summary, onSubmit }: Props) {
+function formatCountedUnit(value: number, unit: ConsumptionUnit | ConsumptionIntervalUnit): string {
+  if (value === 1) {
+    if (unit === "cigarettes") return "cigarette";
+    if (unit === "packs") return "pack";
+    if (unit === "days") return "day";
+    return "week";
+  }
+
+  return unit;
+}
+
+export function PatientPage({
+  inputs,
+  summary,
+  onSubmit,
+  cigaretteBrands,
+  vapeBrands,
+  brandCatalogStatus,
+  brandCatalogSource,
+}: Props) {
   return (
     <section className="page-panel">
       <div className="page-grid page-grid--patient">
@@ -22,7 +46,7 @@ export function PatientPage({ inputs, summary, onSubmit }: Props) {
               <span className="record-card__label">Smoking history</span>
               <strong className="record-card__value">{summary.smokingYears.toFixed(1)} years</strong>
               <p className="record-card__detail">
-                {summary.consumptionQuantity} {summary.consumptionUnit} every {summary.consumptionIntervalCount} {summary.consumptionIntervalUnit}
+                {summary.consumptionQuantity} {formatCountedUnit(summary.consumptionQuantity, summary.consumptionUnit)} every {summary.consumptionIntervalCount} {formatCountedUnit(summary.consumptionIntervalCount, summary.consumptionIntervalUnit)}
               </p>
             </article>
 
@@ -47,7 +71,16 @@ export function PatientPage({ inputs, summary, onSubmit }: Props) {
         </article>
 
         <article className="card">
-          <InputForm inputs={inputs} summary={summary} onSubmit={onSubmit} />
+          <InputForm
+            key={JSON.stringify(inputs)}
+            inputs={inputs}
+            summary={summary}
+            onSubmit={onSubmit}
+            cigaretteBrands={cigaretteBrands}
+            vapeBrands={vapeBrands}
+            brandCatalogStatus={brandCatalogStatus}
+            brandCatalogSource={brandCatalogSource}
+          />
         </article>
       </div>
     </section>

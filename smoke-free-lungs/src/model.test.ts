@@ -22,6 +22,7 @@ const baseInputs: Inputs = {
   consumptionIntervalUnit: "days",
   consumptionIntervalCount: 1,
   cigaretteBrandId: "average-us-king",
+  cigaretteBrandName: "Average US king-size (reference)",
   dobISO: "1991-01-10",
   biologicalSex: "other",
   weightValue: 70,
@@ -60,6 +61,7 @@ describe("model", () => {
         consumptionIntervalUnit: "days",
         consumptionIntervalCount: 0,
         cigaretteBrandId: "unknown-id",
+        cigaretteBrandName: "Corner store special",
         dobISO: "2099-01-01",
         biologicalSex: "other",
         weightValue: 500,
@@ -77,7 +79,8 @@ describe("model", () => {
     expect(sanitized.cigsPerDay).toBeLessThanOrEqual(80);
     expect(sanitized.weightKg).toBe(300);
     expect(sanitized.heightCm).toBe(240);
-    expect(sanitized.cigaretteBrandId).toBe("average-us-king");
+    expect(sanitized.cigaretteBrandId).toBe("");
+    expect(sanitized.cigaretteBrandName).toBe("Corner store special");
     expect(sanitized.dobISO).toBe(inferDOBFromAgeYears(30, new Date(2026, 1, 26)));
     expect(sanitized.vapeBrandName).toBe("AeroMint");
     expect(sanitized.recoveryGoal).toBe("Reach one full smoke-free year");
@@ -136,6 +139,23 @@ describe("model", () => {
     );
 
     expect(invalidLb.errors.weightValue).toMatch(/\blb\b/i);
+  });
+
+  it("accepts a custom cigarette brand when no catalog match exists", () => {
+    const result = validateInputs(
+      {
+        ...baseInputs,
+        cigaretteBrandId: "",
+        cigaretteBrandName: "Local hand-rolled brand",
+      },
+      new Date(2026, 1, 26),
+    );
+
+    expect(result.errors.cigaretteBrandId).toBeUndefined();
+    expect(result.value?.cigaretteBrandId).toBe("");
+    expect(result.value?.cigaretteBrandName).toBe("Local hand-rolled brand");
+    expect(result.value?.nicotineMgPerCig).toBe(1);
+    expect(result.value?.tarMgPerCig).toBe(12);
   });
 
   it("produces monotonic trends for key subscores", () => {

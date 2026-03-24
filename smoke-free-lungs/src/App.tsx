@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { DEFAULT_BRAND_ID } from "./cigBrands";
+import {
+  DEFAULT_BRAND_ID,
+  getBrandCatalog,
+  getBrandById,
+  getCigaretteBrands,
+  getVapeBrands,
+  loadBrandCatalog,
+  type BrandCatalogResult,
+} from "./cigBrands";
 import { AppNav, type AppPageId } from "./components/AppNav";
 import { getEarnedBadgeIds, mergeEarnedBadgeIds } from "./milestones";
 import type { LungPartId } from "./lungKnowledge";
@@ -43,6 +51,7 @@ function defaultInputs(now = new Date()): Inputs {
     consumptionIntervalUnit: "days",
     consumptionIntervalCount: 1,
     cigaretteBrandId: DEFAULT_BRAND_ID,
+    cigaretteBrandName: getBrandById(DEFAULT_BRAND_ID)?.name ?? "",
     dobISO: inferDOBFromAgeYears(35, now),
     biologicalSex: "other",
     weightValue: 70,
@@ -94,6 +103,14 @@ export default function App() {
   const [inputs, setInputs] = useState<Inputs>(() => initialInputs);
   const [selectedPartId, setSelectedPartId] = useState<LungPartId | null>(null);
   const [vizMode, setVizMode] = useState<"2d" | "3d">("2d");
+  const [brandCatalog, setBrandCatalog] = useState(() => getBrandCatalog());
+  const [brandCatalogMeta, setBrandCatalogMeta] = useState<{
+    status: "loading" | "ready";
+    source: BrandCatalogResult["source"];
+  }>({
+    status: "loading",
+    source: "fallback",
+  });
   const [currentPage, setCurrentPage] = useState<AppPageId>(() =>
     typeof window === "undefined" ? "home" : pageFromHash(window.location.hash),
   );
@@ -110,7 +127,7 @@ export default function App() {
 
   const todayKey = todayISO();
   const now = useMemo(() => parseISODateLocal(todayKey) ?? new Date(), [todayKey]);
-  const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now]);
+  const safeInputs = useMemo(() => sanitizeInputs(inputs, now), [inputs, now, brandCatalog]);
   const fullRecoveryDay = useMemo(() => estimateFullRecoveryDay(safeInputs), [safeInputs]);
   const effectivePreviewDays = useMemo(
     () => clampPreview(previewDays, fullRecoveryDay),
@@ -121,8 +138,10 @@ export default function App() {
     () => computeRecoveryState(safeInputs, effectivePreviewDays, now, fullRecoveryDay),
     [safeInputs, effectivePreviewDays, now, fullRecoveryDay],
   );
+  const cigaretteBrands = useMemo(() => getCigaretteBrands(), [brandCatalog]);
+  const vapeBrands = useMemo(() => getVapeBrands(), [brandCatalog]);
 
-  const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}|${safeInputs.vapeBrandName}`;
+  const seedKey = `${safeInputs.smokingStartDateISO}|${safeInputs.quitDateISO}|${safeInputs.cigsPerDay.toFixed(3)}|${safeInputs.cigaretteBrandId}|${safeInputs.cigaretteBrandName}|${safeInputs.dobISO}|${safeInputs.weightKg}|${safeInputs.heightCm}|${safeInputs.biologicalSex}|${safeInputs.vapeBrandName}`;
   const hero = pageCopy(currentPage, safeInputs.recoveryGoal);
 
   useEffect(() => {
@@ -132,6 +151,23 @@ export default function App() {
       earnedBadgeIds,
     });
   }, [inputs, earnedBadgeIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadBrandCatalog().then((result) => {
+      if (cancelled) return;
+      setBrandCatalog(result.brands);
+      setBrandCatalogMeta({
+        status: "ready",
+        source: result.source,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -186,7 +222,15 @@ export default function App() {
       </header>
 
       {currentPage === "patient" ? (
-        <PatientPage inputs={inputs} summary={safeInputs} onSubmit={handleInputSubmit} />
+        <PatientPage
+          inputs={inputs}
+          summary={safeInputs}
+          onSubmit={handleInputSubmit}
+          cigaretteBrands={cigaretteBrands}
+          vapeBrands={vapeBrands}
+          brandCatalogStatus={brandCatalogMeta.status}
+          brandCatalogSource={brandCatalogMeta.source}
+        />
       ) : null}
 
       {currentPage === "home" ? (

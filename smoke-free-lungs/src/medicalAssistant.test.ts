@@ -20,6 +20,7 @@ function buildState(): RecoveryState {
     consumptionIntervalUnit: "days",
     consumptionIntervalCount: 1,
     cigaretteBrandId: "average-us-king",
+    cigaretteBrandName: "Average US king-size (reference)",
     dobISO: "1991-01-10",
     biologicalSex: "other",
     weightValue: 70,

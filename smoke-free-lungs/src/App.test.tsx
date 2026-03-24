@@ -37,6 +37,7 @@ function defaultStoredInputs(quitDateISO: string): Inputs {
     consumptionIntervalUnit: "days",
     consumptionIntervalCount: 1,
     cigaretteBrandId: DEFAULT_BRAND_ID,
+    cigaretteBrandName: "Average US king-size (reference)",
     dobISO: formatISODateLocal(dob),
     biologicalSex: "other",
     weightValue: 70,
@@ -98,9 +99,22 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
 
-    expect(screen.getByLabelText(/cigarette brand/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/vape brand/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/recovery goal/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^cigarette brand$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^vape brand$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^recovery goal$/i)).toBeInTheDocument();
+  });
+
+  it("filters the cigarette catalog as the user types", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /patient record/i }));
+    await userEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
+
+    await userEvent.clear(screen.getByLabelText(/search cigarette catalog/i));
+    await userEvent.type(screen.getByLabelText(/search cigarette catalog/i), "marl");
+
+    expect(screen.getByRole("option", { name: /marlboro red/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /camel filters/i })).not.toBeInTheDocument();
   });
 
   it("shows the stored recovery goal on the progress page", () => {
