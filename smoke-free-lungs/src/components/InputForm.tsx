@@ -1,4 +1,4 @@
-import { useMemo, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useMemo, useState, type FocusEvent, type SubmitEvent, type KeyboardEvent, type ReactNode } from "react";
 import type { BrandCatalogResult, CigaretteBrand, VapeBrand } from "../cigBrands";
 import {
   estimateCigsPerDay,
@@ -399,7 +399,7 @@ export function InputForm({
     setIsEditing(false);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextValidation = validateInputs(draft);
 
