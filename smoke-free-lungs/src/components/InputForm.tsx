@@ -415,11 +415,13 @@ export function InputForm({
 
   return (
     <section>
-      <h2 className="section-title">Smoking History</h2>
-      <p className="section-subtitle">Summary stays visible. Expand to update and submit changes.</p>
+      <h2 className="section-title">Profile</h2>
+      <p className="section-subtitle">
+        {/* Summary stays visible. Expand to update and submit changes. */}
+      </p>
 
       <div className="summary-block">
-        <h3 className="method-heading">Summary</h3>
+        {/* <h3 className="method-heading">Summary</h3> */}
         <p className="summary-sentence">
           Smoking length: {smokingDurationText(summary.smokingStartDateISO, summary.quitDateISO)}.
         </p>

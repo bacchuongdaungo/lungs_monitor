@@ -116,8 +116,8 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /patient record/i }));
 
-    expect(screen.getByRole("heading", { name: /patient record/i })).toBeInTheDocument();
-    expect(screen.getByText(/medical profile and habits/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /summary/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /profile/i })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /update smoking history/i }));
 

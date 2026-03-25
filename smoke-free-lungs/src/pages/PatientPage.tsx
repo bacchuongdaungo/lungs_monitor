@@ -36,9 +36,9 @@ export function PatientPage({
     <section className="page-panel">
       <div className="page-grid page-grid--patient">
         <article className="card card--hero-panel">
-          <h2 className="section-title">Patient Record</h2>
+          <h2 className="section-title">Summary</h2>
           <p className="section-subtitle">
-            Store the smoking history, quit date, body profile, cigarette brand, vape brand, and recovery goal in one place.
+            {/* Store the smoking history, quit date, body profile, cigarette brand, vape brand, and recovery goal in one place. */}
           </p>
 
           <div className="record-grid">
